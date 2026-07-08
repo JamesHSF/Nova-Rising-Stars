@@ -1,0 +1,2225 @@
+<!DOCTYPE html>
+const CONFIG = {
+  SUPABASE_URL: 'https://xpjyimhlvalhqplulsfw.supabase.co',
+  SUPABASE_ANON_KEY: 'xpjyimhlvalhqplulsfw',
+  GOOGLE_CALENDAR_EMBED: '',  // 選填，見下方
+};
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>摘星計畫 ✦ 團隊打卡系統</title>
+<style>
+  :root {
+    --bg1: #372a75; --bg2: #6d3bb8; --bg3: #b84ba0;
+    --card: rgba(255,255,255,0.94);
+    --ink: #372a5e; --ink-soft: #7a6fa3;
+    --yellow: #ffcf3f; --pink: #ff6f9c; --teal: #35d0ba; --violet: #8f7bff; --orange: #ff9f57;
+    --ok: #2fbf71; --warn: #ffb020; --bad: #e05563;
+    --shadow: 0 10px 30px rgba(40, 20, 90, 0.25);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    font-family: "PingFang TC", "Hiragino Sans", "Microsoft JhengHei", system-ui, sans-serif;
+    background: linear-gradient(160deg, var(--bg1), var(--bg2) 55%, var(--bg3));
+    background-attachment: fixed;
+    color: var(--ink); padding-bottom: 70px;
+  }
+  .twinkle { position: fixed; border-radius: 50%; background: #fff; pointer-events: none;
+    box-shadow: 0 0 6px 1px rgba(255,255,255,.7); animation: tw 3s ease-in-out infinite alternate; }
+  .twinkle.bright { background: #fff7d6; box-shadow: 0 0 10px 2.5px rgba(255,235,160,.85); }
+  @keyframes tw { from { opacity: .15; transform: scale(.55); } to { opacity: 1; transform: scale(1.35); } }
+
+  h1, h2, h3 { font-weight: 900; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; color: var(--ink); border: 2px solid #e6def9; border-radius: 12px; padding: 10px 12px; outline: none; background: #fff; }
+  input:focus, select:focus, textarea:focus { border-color: var(--violet); }
+  input[type=number] { width: 90px; }
+  label { font-size: 13.5px; font-weight: 800; }
+
+  .btn { border: none; border-radius: 12px; padding: 11px 22px; font-weight: 900; font-size: 14.5px; color: #fff; background: linear-gradient(135deg, var(--violet), var(--pink)); transition: transform .12s, filter .12s; }
+  .btn:hover { transform: scale(1.04); }
+  .btn:disabled { filter: grayscale(.7); opacity: .6; cursor: not-allowed; transform: none; }
+  .btn.ghost { background: #f0ebff; color: var(--violet); }
+  .btn.small { padding: 7px 14px; font-size: 13px; border-radius: 10px; }
+  .btn.gold { background: linear-gradient(135deg, var(--yellow), var(--orange)); color: #5a3d00; }
+
+  .panel { background: var(--card); border-radius: 26px; padding: 32px 34px 30px; box-shadow: var(--shadow); animation: pop .35s cubic-bezier(.34,1.56,.64,1) backwards; }
+  @keyframes pop { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+  .panel h2 { font-size: 17px; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .panel h2 { margin-bottom: 20px; }
+  .panel h3 { font-size: 15px; margin: 38px 0 14px; padding-top: 26px; border-top: 1px solid #f0ecfa; color: var(--ink); }
+  .panel h2 + h3, .panel h3:first-child, #dataView h3 { margin-top: 14px; padding-top: 0; border-top: none; }
+  .panel h3.hd-blue { color: #2f6fd0; }
+  .panel h3.hd-red { color: #d63a3a; }
+  .panel h3.hd-earth { color: #9a6b2f; }
+  .panel h3.hd-gray { color: #4a4a4a; }
+  .muted { color: var(--ink-soft); font-size: 12.5px; font-weight: 600; }
+  .hidden { display: none !important; }
+
+  /* ===== auth ===== */
+  #authView { max-width: 420px; margin: 7vh auto 0; padding: 0 18px; }
+  #authView .logo { text-align: center; color: #fff; margin-bottom: 22px; }
+  #authView .logo h1 { font-size: 32px; letter-spacing: 4px; text-shadow: 0 3px 14px rgba(0,0,0,.35); }
+  #authView .logo h1 span { color: var(--yellow); }
+  #authView .logo p.en { opacity: .9; font-weight: 800; letter-spacing: 3px; margin-top: 6px; font-size: 15px; color: var(--yellow); }
+  #authView .logo p.slogan { opacity: .82; font-weight: 600; margin-top: 12px; font-size: 13px; line-height: 1.8; }
+  .auth-tabs { display: flex; gap: 6px; margin-bottom: 16px; background: #f0ebff; border-radius: 12px; padding: 5px; }
+  .auth-tabs button { flex: 1; border: none; border-radius: 9px; padding: 9px; font-weight: 900; font-size: 14px; background: transparent; color: var(--ink-soft); }
+  .auth-tabs button.active { background: #fff; color: var(--violet); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .field input { width: 100%; }
+  .demo-note { margin-top: 14px; font-size: 12.5px; background: #fff8e1; border: 1.5px dashed #ffcf3f; color: #8a6d00; border-radius: 12px; padding: 10px 12px; font-weight: 700; line-height: 1.6; }
+  .err { color: var(--bad); font-size: 13px; font-weight: 800; margin-top: 8px; min-height: 18px; }
+
+  /* ===== app shell ===== */
+  header.app { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px 26px 6px; color: #fff; }
+  header.app h1 { font-size: 22px; letter-spacing: 2px; text-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  header.app h1 span.en { color: var(--yellow); font-size: 15px; letter-spacing: 1px; }
+  header.app h1 > span:first-child { color: var(--yellow); }
+  header.app .slogan { color: rgba(255,255,255,.8); font-size: 12px; font-weight: 600; margin-top: 4px; }
+  @media (max-width: 700px) { header.app .slogan { display: none; } header.app h1 span.en { display: block; margin-top: 2px; } }
+  header.app .spacer { flex: 1; }
+  .whoami { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.15); border-radius: 999px; padding: 7px 8px 7px 16px; font-weight: 800; font-size: 14px; backdrop-filter: blur(6px); }
+  .rolebadge { background: var(--yellow); color: #5a3d00; border-radius: 999px; padding: 3px 12px; font-size: 12px; font-weight: 900; }
+  nav.tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 26px 4px; }
+  nav.tabs button { border: none; border-radius: 999px; padding: 10px 20px; font-weight: 900; font-size: 14.5px; background: rgba(255,255,255,.16); color: rgba(255,255,255,.9); backdrop-filter: blur(6px); transition: all .15s; }
+  nav.tabs button:hover { background: rgba(255,255,255,.28); }
+  nav.tabs button.active { background: var(--yellow); color: #5a3d00; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+  main { padding: 20px 26px 36px; display: grid; gap: 28px; max-width: 1100px; margin: 0 auto; }
+  main > *, .panel, .trio .cell { min-width: 0; } /* 防 grid 項目被內容撐破 */
+  /* 動態表格在窄螢幕橫向捲動，避免撐破版面 */
+  #bvTable, #ibvTable, #wTop10, #wVisits { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 700px) {
+    header.app, nav.tabs, main { padding-left: 14px; padding-right: 14px; }
+    main { gap: 18px; padding-bottom: 26px; }
+    .panel { padding: 24px 18px 22px; border-radius: 22px; }
+    .panel h3 { margin: 28px 0 12px; padding-top: 20px; }
+    .savebar { margin-top: 26px; padding-top: 16px; }
+    nav.tabs button { padding: 9px 14px; font-size: 13.5px; }
+    header.app h1 { font-size: 19px; }
+    .whoami { padding: 6px 6px 6px 12px; font-size: 13px; }
+    input, select, textarea { font-size: 16px; } /* 防 iOS 聚焦自動縮放 */
+    .trio .cell { padding: 12px; }
+    .grpchips { padding-left: 12px; }
+    .hperiod { min-width: 76px; font-size: 13.5px; }
+    .drawncard.nova { width: 100%; max-width: 300px; }
+    .cardzone { gap: 12px; }
+    .kv > span { min-width: 84px; }
+    .mrow .right { width: 100%; justify-content: flex-start; margin-left: 50px; }
+    .starrow { font-size: 22px; }
+    .teambonus .bstar { min-width: 100%; }
+  }
+  @media (max-width: 380px) { .mrow .right { margin-left: 0; } }
+
+  .banner { border-radius: 16px; padding: 12px 18px; font-weight: 800; font-size: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .banner.sat { background: #fff3d6; color: #8a6d00; border: 2px solid #ffcf3f; }
+  .banner.nudge { background: #ffe4ee; color: #c2266b; border: 2px solid #ff9dc0; }
+  .banner .btn { margin-left: auto; }
+
+  /* status pills */
+  .pillstat { border-radius: 999px; padding: 4px 14px; font-size: 12.5px; font-weight: 900; }
+  .pillstat.high { background: #d9f7e8; color: #0b8a4e; }
+  .pillstat.low { background: #fff3d6; color: #a07500; }
+  .pillstat.none { background: #ffe1e1; color: #c23f3f; }
+  .pillstat.ok { background: #d9f7e8; color: #0b8a4e; }
+  .pillstat.no { background: #f1eefb; color: #9a90bd; }
+
+  /* number trio */
+  .trio { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 12px; }
+  @media (max-width: 620px) { .trio { grid-template-columns: 1fr; } }
+  .trio .cell { background: #f6f3ff; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .trio .cell input { width: 100%; }
+  .goalhint { font-size: 11.5px; color: var(--ink-soft); font-weight: 700; }
+  .slrow { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .slrow input { flex: 1; padding: 8px 10px; border-radius: 10px; }
+  .slrow .del { border: none; background: #ffe1e1; color: #c23f3f; border-radius: 8px; width: 28px; height: 28px; font-weight: 900; flex-shrink: 0; cursor: pointer; }
+  .countpill { background: #eae4ff; color: var(--violet); border-radius: 999px; padding: 2px 10px; font-size: 11.5px; font-weight: 900; margin-left: 4px; }
+  .prevgoal { background: #fff8e1; border: 1.5px dashed #ffcf3f; color: #8a6d00; border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 13.5px; margin-bottom: 10px; line-height: 1.6; }
+  .starrow { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin: 6px 0 4px; font-size: 26px; line-height: 1; }
+  .star { color: #ddd4f5; }
+  .star.on { color: #ffcf3f; text-shadow: 0 0 8px rgba(255,207,63,.7); }
+  .superstar { color: #a855f7; text-shadow: 0 0 12px rgba(168,85,247,.85); font-size: 30px; margin-left: 6px; animation: pop .4s cubic-bezier(.34,1.56,.64,1); }
+  .traktrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; margin-top: 8px; background: #f6f3ff; flex-wrap: wrap; }
+  .traktrow .wk { font-weight: 900; min-width: 92px; }
+  .traktrow .starrow { font-size: 20px; margin: 0; }
+  .starmeta { background: #f6f3ff; border-radius: 14px; padding: 12px 16px; font-weight: 800; font-size: 14.5px; }
+  .starmeta b { color: var(--violet); font-size: 18px; }
+  .diarynav { display: flex; align-items: center; gap: 14px; justify-content: center; margin-bottom: 14px; }
+  .diarynav .dwk { font-weight: 900; font-size: 15px; color: var(--violet); min-width: 110px; text-align: center; }
+  .dblog { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1.5px dashed #eee6ff; }
+  .dblog:last-child { border-bottom: none; }
+  .dblog.empty { opacity: .55; }
+  .dblog-date { flex-shrink: 0; width: 66px; font-weight: 900; font-size: 15px; color: var(--ink); line-height: 1.3; }
+  .dblog-date .dow { display: block; font-size: 12px; color: var(--ink-soft); font-weight: 700; }
+  .dblog-body { flex: 1; min-width: 0; }
+  .dblog-text { font-size: 14px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
+  .dblog-meta { font-size: 12px; color: var(--ink-soft); font-weight: 700; margin-top: 6px; }
+  .teambonus { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .bstar { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 12px; border-radius: 16px; padding: 12px 16px; font-weight: 800; font-size: 14px; }
+  .bstar .ic { font-size: 30px; }
+  .bstar b { font-size: 22px; }
+  .bstar.orange { background: linear-gradient(135deg, #fff0d9, #ffe0b8); color: #b5651d; }
+  .bstar.rainbow { background: linear-gradient(135deg, #ffe3f0, #e5e0ff, #d9f6ff); color: #8b47b8; }
+  .bstar .muted { font-weight: 600; font-size: 11.5px; }
+  .rechead { font-weight: 900; font-size: 13.5px; color: var(--violet); margin-bottom: 6px; }
+  .recfold { background: #fff; border: 1.5px solid #ece5ff; border-radius: 12px; margin-bottom: 6px; }
+  .recfold summary { cursor: pointer; padding: 9px 14px; font-weight: 800; font-size: 13.5px; color: var(--ink); list-style-position: inside; }
+  .recfold[open] summary { border-bottom: 1.5px dashed #eee6ff; }
+  .recfold .recbody { padding: 6px 16px 10px; }
+  .distrow { display: flex; gap: 12px; align-items: baseline; padding: 7px 10px; border-radius: 12px; margin-bottom: 6px; background: #f6f3ff; }
+  .distn { font-weight: 900; color: var(--violet); min-width: 60px; font-size: 15px; }
+  .distp { font-weight: 700; font-size: 13.5px; line-height: 1.6; }
+  .superbox { background: #f3eeff; border: 1.5px solid #e2d8ff; border-radius: 14px; padding: 12px 16px; margin-bottom: 8px; }
+  .superhd { font-weight: 900; font-size: 14px; color: #7b3fd4; margin-bottom: 8px; }
+  .superbox .chk { font-size: 13.5px; font-weight: 700; color: var(--ink-soft); padding: 3px 0; }
+  .superbox .chk.ok { color: #2fbf71; }
+
+  /* 我的紀錄 */
+  .hrow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; margin-top: 8px; background: #f6f3ff; cursor: pointer; transition: background .15s; flex-wrap: wrap; }
+  .hrow:hover { background: #eee8ff; }
+  .hperiod { font-weight: 900; font-size: 14.5px; min-width: 96px; }
+  .hsum { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .hrow .arrow { color: var(--ink-soft); font-weight: 900; }
+  .hdetail { background: #faf8ff; border: 1.5px solid #ece5ff; border-radius: 0 0 14px 14px; margin: -6px 6px 0; padding: 14px 16px; }
+  .kv { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1.5px dashed #eee6ff; font-size: 13.5px; align-items: baseline; }
+  .kv:last-child { border-bottom: none; }
+  .kv > span { min-width: 96px; flex-shrink: 0; color: var(--ink-soft); font-weight: 800; font-size: 12.5px; }
+  .kv > div { flex: 1; font-weight: 600; line-height: 1.7; overflow-x: auto; }
+
+  /* dynamic tables */
+  table.dyn { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.dyn th { text-align: left; font-size: 12px; color: var(--ink-soft); padding: 4px 6px; }
+  table.dyn td { padding: 4px 6px; }
+  table.dyn input, table.dyn select { width: 100%; padding: 8px 10px; border-radius: 10px; }
+  table.dyn .del { border: none; background: #ffe1e1; color: #c23f3f; border-radius: 8px; width: 30px; height: 30px; font-weight: 900; }
+  .totalline { margin-top: 8px; font-weight: 900; font-size: 15px; color: var(--violet); text-align: right; }
+  .computed-cell { display: inline-block; padding: 8px 10px; font-weight: 900; color: var(--violet); font-size: 13.5px; }
+
+  .checks { display: flex; flex-wrap: wrap; gap: 10px; }
+  .checks label { display: flex; align-items: center; gap: 7px; background: #f6f3ff; border-radius: 999px; padding: 8px 16px; cursor: pointer; font-weight: 800; font-size: 13.5px; border: 2px solid transparent; }
+  .checks label:has(input:checked) { background: #eae4ff; border-color: var(--violet); color: var(--violet); }
+  .checks input { accent-color: var(--violet); width: 16px; height: 16px; }
+
+  textarea.diary { width: 100%; min-height: 110px; resize: vertical; line-height: 1.7; }
+  .charcount { text-align: right; font-size: 12px; color: var(--ink-soft); font-weight: 700; margin-top: 4px; }
+
+  /* healing card */
+  .cardzone { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .cardgrid { display: grid; grid-template-columns: repeat(9, 34px); gap: 6px; }
+  @media (max-width: 620px) { .cardgrid { grid-template-columns: repeat(6, 34px); } }
+  .minicard { width: 34px; height: 48px; border-radius: 6px; cursor: pointer; border: none;
+    background: linear-gradient(135deg, #6d5df0, #b84ba0); color: rgba(255,255,255,.7); font-size: 13px;
+    transition: transform .15s; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+  .minicard:hover { transform: translateY(-4px) rotate(-3deg); }
+  /* NOVA 覆蓋牌（牌背）— 深炭底、金色星芒、星座 */
+  .cardback { width: 214px; height: 306px; border-radius: 20px; border: none; padding: 0; background: none;
+    cursor: pointer; overflow: hidden; box-shadow: 0 12px 30px rgba(30,26,20,.4);
+    transition: transform .18s; display: block; line-height: 0; }
+  .cardback:hover { transform: translateY(-6px) rotate(-1.5deg); }
+  .cardback svg { display: block; width: 100%; height: 100%; }
+  .novacore { background: linear-gradient(135deg, #f3eeff, #ffe9f5); border: 1.5px solid #e6d8ff; border-radius: 14px; padding: 12px 16px; margin-bottom: 14px; }
+  .novahint { font-size: 13.5px; font-weight: 800; color: #7b3fd4; line-height: 1.7; margin-bottom: 8px; }
+  .novaphrase { font-size: 13.5px; font-weight: 800; color: var(--ink); line-height: 1.6; }
+  .novaphrase.zh { color: var(--ink-soft); font-weight: 700; }
+  @keyframes flip { from { transform: rotateY(90deg) scale(.8); opacity: 0; } }
+  /* NOVA 翻開牌卡 */
+  .drawncard.nova { width: 280px; border-radius: 20px; padding: 22px 22px 18px; cursor: pointer;
+    border: 1.5px solid; box-shadow: 0 12px 30px rgba(80,60,40,.22);
+    display: flex; flex-direction: column; gap: 12px; text-align: left;
+    animation: flip .5s cubic-bezier(.34,1.56,.64,1); }
+  .drawncard.nova .nc-head { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid rgba(0,0,0,.1); padding-bottom: 8px; }
+  .drawncard.nova .nc-num { font-family: Georgia, serif; font-size: 30px; font-weight: 800; }
+  .drawncard.nova .nc-el { font-size: 11px; font-weight: 700; letter-spacing: 1px; opacity: .85; }
+  .drawncard.nova .nc-title { font-size: 30px; font-weight: 900; letter-spacing: 6px; text-align: center; margin: 4px 0; }
+  .drawncard.nova .nc-motif { display: flex; justify-content: center; }
+  .drawncard.nova .nc-sec { font-size: 13px; line-height: 1.7; }
+  .drawncard.nova .nc-sec b { display: block; font-size: 12.5px; letter-spacing: 2px; margin-bottom: 2px; }
+  .drawncard.nova .nc-sec p { color: #5a5044; font-weight: 600; margin: 0; }
+  .drawncard.nova .nc-foot { text-align: center; font-size: 10px; letter-spacing: 3px; color: #9a8f7d; font-weight: 700; margin-top: 2px; }
+  .drawncard.nova .locktag { font-size: 11px; font-weight: 800; text-align: center; }
+  .sharecard { margin-top: 12px; background: linear-gradient(135deg, #f9508e, #c13584, #833ab4); color: #fff; }
+
+  /* progress bars */
+  .proj { margin-bottom: 14px; }
+  .proj .row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; margin-bottom: 6px; }
+  .bar { height: 14px; border-radius: 999px; background: #ece7fb; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 999px; transition: width .6s cubic-bezier(.22,1,.36,1); }
+
+  /* member rows (leader/admin) */
+  .mrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; margin-bottom: 8px; background: #f8f6ff; flex-wrap: wrap; }
+  .mrow .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; color: #fff; font-weight: 900; flex-shrink: 0; }
+  .mrow .nm { font-weight: 900; font-size: 14.5px; }
+  .mrow .sub { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
+  .mrow .right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  /* admin data table */
+  .datatable-wrap { overflow-x: auto; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 640px; }
+  table.data th { background: #f0ebff; color: var(--violet); font-size: 12px; padding: 8px 10px; text-align: left; position: sticky; top: 0; }
+  table.data td { padding: 7px 10px; border-bottom: 1.5px solid #f1eefb; vertical-align: top; }
+  table.data tr:hover td { background: #faf8ff; }
+
+  .toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(80px); z-index: 99;
+    background: #372a5e; color: #fff; font-weight: 800; font-size: 14px; border-radius: 999px; padding: 12px 26px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: transform .3s cubic-bezier(.34,1.56,.64,1); pointer-events: none; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .savebar { display: flex; justify-content: flex-end; gap: 12px; margin-top: 34px; padding-top: 22px; border-top: 1px solid #f0ecfa; align-items: center; }
+  .savedmark { font-size: 13px; font-weight: 900; color: var(--ok); }
+  iframe.gcal { width: 100%; height: 420px; border: none; border-radius: 14px; }
+  .gcal-placeholder { border: 2px dashed #d8cef5; border-radius: 14px; padding: 30px; text-align: center; color: var(--ink-soft); font-weight: 700; font-size: 13.5px; line-height: 1.8; }
+  .fivegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  .goalbadge { border-radius: 14px; padding: 12px 18px; font-weight: 900; font-size: 16px; margin: 10px 0; display: flex; align-items: center; gap: 10px; animation: pop .4s cubic-bezier(.34,1.56,.64,1); }
+  .goalbadge .gb-sub { font-size: 13px; font-weight: 700; opacity: .85; }
+  .goalbadge.csie { background: linear-gradient(135deg, #fff0d9, #ffd9b8); color: #b5651d; border: 2px solid #ffb877; }
+  .goalbadge.mufo { background: linear-gradient(135deg, #ffe3f0, #e5d8ff); color: #8b2fb8; border: 2px solid #d99cff; justify-content: center; }
+  .grpchips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 12px 12px 62px; }
+  .grpchips .grplabel { font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+  .gchip { display: inline-flex; align-items: center; gap: 6px; background: #f0ebff; border: 2px solid transparent; border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .gchip:has(input:checked) { background: #eae4ff; border-color: var(--violet); color: var(--violet); }
+  .gchip input { accent-color: var(--violet); width: 15px; height: 15px; }
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- ===================== AUTH ===================== -->
+<div id="authView">
+  <div class="logo">
+    <h1><span>✦</span> 新心摘星計畫</h1>
+    <p class="en">Nova Rising Stars</p>
+    <p class="slogan">建立個人的生意節奏，讓成功成為習慣。<br>Building habits, Reaching goals, Shine Together.</p>
+  </div>
+  <div class="panel">
+    <div class="auth-tabs">
+      <button id="tabLogin" class="active">登入</button>
+      <button id="tabReg">註冊</button>
+    </div>
+    <div class="field" id="fName" style="display:none">
+      <label>成員名字</label>
+      <input id="aName" type="text" placeholder="你的名字" maxlength="20">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input id="aEmail" type="email" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label>密碼</label>
+      <input id="aPass" type="password" placeholder="至少 6 碼">
+    </div>
+    <button class="btn" id="authBtn" style="width:100%">登入</button>
+    <div class="err" id="authErr"></div>
+    <div class="demo-note" id="demoNote" style="display:none">
+      🧪 <b>示範模式</b>：尚未設定 Supabase，資料只存在這台瀏覽器。<br>
+      <a href="#" id="seedBtn" style="color:#8a6d00">一鍵載入示範帳號（成員／守護者／管理者）→</a><br>
+      <span id="seedList" style="font-weight:600"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="appView" class="hidden">
+  <header class="app">
+    <div class="apptitle">
+      <h1><span>✦</span> 新心摘星計畫 <span class="en">Nova Rising Stars</span></h1>
+      <p class="slogan">建立個人的生意節奏，讓成功成為習慣。Building habits, Reaching goals, Shine Together.</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="whoami">
+      <span id="uName"></span>
+      <span class="rolebadge" id="uRole"></span>
+      <button class="btn small ghost" id="logoutBtn">登出</button>
+    </div>
+  </header>
+  <nav class="tabs" id="tabs"></nav>
+  <main id="content"></main>
+</div>
+
+<script>
+/* =========================================================
+   摘星計畫 — 設定
+   部署真實後端：到 supabase.com 建立專案，執行 supabase-setup.sql，
+   然後把下面兩個值填入即可（留空 = 示範模式，資料存 localStorage）
+   ========================================================= */
+const CONFIG = {
+  SUPABASE_URL: '',            // 例如 'https://xxxx.supabase.co'
+  SUPABASE_ANON_KEY: '',       // Project Settings → API → anon public key
+  GOOGLE_CALENDAR_EMBED: 'https://calendar.google.com/calendar/embed?src=bepel9m4org7ho6mhlbstpmp9s%40group.calendar.google.com&ctz=Asia%2FTaipei',   // Google 行事曆「嵌入代碼」中的 src 網址（選填）
+};
+
+/* ---------- 常數 ---------- */
+const CARE_TYPES = ['面交','建立關係','產品體驗','PMT邀約','展示計劃','分享商機','其他'];
+const CUSTOMER_TYPES = ['新顧客','舊顧客回購','舊顧客購買新品項','自用'];
+const TRAININGS = ['GMTSS','CR','PMT'];
+const FOCUS_OPTS = ['看書','文章','錄音檔','Podcast'];
+const ROLE_LABEL = { member: '一般成員', leader: '守護者', admin: '管理者' };
+const ROLE_EMOJI = { member: '🌱', leader: '🌙', admin: '☀️' };
+const MONTH_BV_GOAL = 500, MONTH_IBV_GOAL = 100;
+const QUARTER_BV_GOAL = 1500, QUARTER_IBV_GOAL = 300;
+/* NOVA 新心摘星牌卡 — 36 CARDS OF GROWTH（四大能量：風喜悅／火勇氣／水關係／土成長） */
+const NOVA_ELEMENTS = [
+  { cn: '風', en: 'WIND',  chap: '喜悅能量', word: 'IGNITE',  sub: '點亮自己', color: '#8b7fc4', bg1: '#f4f2fb', bg2: '#e9e5f6', ink: '#5b4c8f' },
+  { cn: '火', en: 'FIRE',  chap: '勇氣能量', word: 'RHYTHM',  sub: '建立節奏', color: '#c1803f', bg1: '#fbf4ea', bg2: '#f4e6d3', ink: '#9a5f22' },
+  { cn: '水', en: 'WATER', chap: '關係能量', word: 'CONNECT', sub: '建立連結', color: '#3d8a74', bg1: '#eef4f2', bg2: '#dde9e5', ink: '#2f6b58' },
+  { cn: '土', en: 'EARTH', chap: '成長能量', word: 'GROW',    sub: '持續成長', color: '#7a8a3f', bg1: '#f4f5ea', bg2: '#e7ead4', ink: '#5b6a2c' },
+];
+const novaEl = n => NOVA_ELEMENTS[Math.floor((n - 1) / 9)];
+const NOVA_CARDS = [
+  { t: '微光', m: '每一份真誠，無論大小都值得被看見。', a: '今天真心傳出訊息給一位潛在、顧客或夥伴。' },
+  { t: '感恩', m: '感謝是一種放大練習，它會讓你看見更多擁有。', a: '寫下一件今天值得感謝的事，分享在社群群組或 IG 上，並主動對一位顧客和夥伴說一句謝謝。' },
+  { t: '笑容', m: '別小看你的笑容，它是最有溫度的名片。', a: '今天與每位顧客、潛在、夥伴交流時，都帶著微笑，並且表達感謝。' },
+  { t: '豐盛', m: '世界回應的，往往是你的信念。', a: '記錄三件最近發生、讓你感受到喜悅滿足的小事，其中至少一件與事業有關，並紀錄你為何為此開心。' },
+  { t: '分享', m: '分享，不是失去，而是讓價值開始流動。', a: '分享一個對你有幫助的觀念、產品或故事給一位朋友，記錄他們的回饋。' },
+  { t: '欣賞', m: '欣賞別人，也是在擴展你的世界。', a: '今天看見一位朋友或夥伴的優點，並且說出來或傳訊息讓對方知道。' },
+  { t: '自在', m: '做自己時，你最有魅力。', a: '多一點真實，少一點包裝。今天聊天時，觀察自己在哪些時刻，身體最放鬆、心情最愉悅。' },
+  { t: '驚喜', m: '今天將會有意想不到的美好。', a: '主動聯繫一位很久沒聊天的人，不帶目的，只是關心。' },
+  { t: '喜悅', m: '快樂不是結果，而是一種選擇。', a: '完成今天的 business to-do list 後，好好犒賞自己，為此慶祝。' },
+  { t: '開始', m: '不用等到準備好了才開始，而是開始了，才會越來越好。', a: '今天完成一件最重要的事，不用等到準備完美，只專注在踏出第一步，並記錄下踏出第一步的感受。' },
+  { t: '突破', m: '真正的成長，都發生在舒適圈外。', a: '今天做一件平時不敢做的事，例如：主動出擊、認識一位新朋友，或和已經認識的人開啟一段新的對話。' },
+  { t: '相信', m: '你比自己想像中更棒。', a: '完成每日基本的生意節奏（聯繫／分享／跟進／學習），紀錄你的心情或發現。' },
+  { t: '界線', m: '尊重自己，也是尊重別人。', a: '今天練習安排一段專注工作時間，拒絕不必要的干擾。' },
+  { t: '選擇', m: '每一次選擇，都在塑造未來。', a: '今天選擇去做一件對我而言重要的事。' },
+  { t: '前進', m: '不要懷疑，你正在往你的夢想前進。', a: '選擇一件你一直拖延的小事，今天先完成第一步，寫下你的心情。' },
+  { t: '信任', m: '相信過程，而不只依賴結果。', a: '今天遇到困難時，先放下並展開下一個小行動，紀錄有什麼新的體驗。' },
+  { t: '行動', m: '夢想，需要今天的行動支持。', a: '分享出一個你真正相信、或幫助過你的產品、理念或價值觀。' },
+  { t: '勇敢', m: '每一次勇敢，都讓你更自由。', a: '今天主動做出小改變，例如做一件你原本害怕的事，或發出一則你原本不敢傳的訊息。' },
+  { t: '休息', m: '休息，才有餘裕主動做選擇。', a: '一直停不下來又前進不了嗎？留白半小時，整理思緒再重新開始。' },
+  { t: '接住自己', m: '今天的你，值得被溫柔對待。', a: '遇到挫折或瓶頸也沒有關係，這代表你正在突破和前進，寫下一件你肯定自己的事。' },
+  { t: '慢下來', m: '放慢速度，你會看得更清楚。', a: '今天在一場對話、一件工作，或一次用餐中，練習全心全意地投入當下。' },
+  { t: '放下', m: '放下，不意味著失去，而代表你將擁有更多。', a: '寫下一件你無法控制的事，練習放手，然後把它丟進垃圾桶。' },
+  { t: '理解', m: '理解，比爭論更有力量。', a: '今天試著多問一個問題，試著聆聽，少給建議。' },
+  { t: '包容', m: '每個人都有自己的故事。', a: '練習理解他人和你的不一樣，並發現他的一個閃光點。' },
+  { t: '重新開始', m: '今天，就是新的起點。', a: '把你想做、或曾經未完成的事情，再重新做一次。' },
+  { t: '平靜', m: '平靜，不是壓抑感受，而是選擇跟自己站在一起。', a: '當你覺得焦慮或擔心時，先陪伴自己，深呼吸三次，再開始做事。' },
+  { t: '療癒', m: '真正的力量，來自願意照顧自己。', a: '今天做一件讓自己重新充電的小事，讓你在與人連結時更自在、更有餘裕。' },
+  { t: '種子', m: '每一次努力，都是未來的養分。', a: '今天做一件會在未來發芽的小行動，例如：邀請、分享或跟進。' },
+  { t: '累積', m: '每天都進步一點點，將帶來巨大的改變。', a: '恭喜你走得這麼遠。寫下一件現在比過去更好的地方，紀錄自己的改變。' },
+  { t: '探索', m: '保持好奇心，世界將會一直為你打開。', a: '探索一項產品、工具、人或成功故事，並記錄你的新發現。' },
+  { t: '複利', m: '每一次微小重複，都在累積你渴望的結果。', a: '今天重複一個對你而言有效的行動，例如關心家人朋友、顧客和夥伴，和他們分享價值，讓信任持續累積。' },
+  { t: '希望', m: '你的願望將會成真。', a: '寫下一個近期最想完成的願望或目標，並列出三個需要的資源（能夠幫助你的人事物）。' },
+  { t: '專注', m: '專注做好眼前的事，就是最好的前進。', a: '今天騰出 30 分鐘，專注完成一件重要工作，並紀錄你完成後的感受。' },
+  { t: '綻放', m: '你有屬於自己的花期，它將到來。', a: '專注在自己的旅程，專注於你的每日節奏，不與他人比較。' },
+  { t: '信念', m: '你的信念，決定你的方向。', a: '每一次行動前，提醒自己：我正在創造什麼價值，以及為何這件事值得我持續堅持。' },
+  { t: '摘星', m: '真正的成就，不是走了多遠，而是你一直都沒有停止前進。', a: '回顧這段時間，寫下一個你看見自己成長的瞬間。' },
+];
+const HEALING_CARDS = NOVA_CARDS.map(c => c.m); // 相容舊用法
+const AVATAR_COLORS = ['#8f7bff','#ff6f9c','#35d0ba','#ff9f57','#4fc3f7','#b48fff','#66bb6a'];
+
+/* ---------- 日期工具 ---------- */
+const pad = n => String(n).padStart(2, '0');
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const monthStr = () => todayStr().slice(0, 7);
+// 週期為「週六～週五」，以該週的週六日期字串當作週期鍵（例：2026-07-04 代表 7/4–7/10）
+function weekStartDate(date = new Date()) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() - ((d.getDay() + 1) % 7)); // 回推到最近的週六
+  return d;
+}
+const fmtD = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const weekKey = (date = new Date()) => fmtD(weekStartDate(date));
+const shiftWeekKey = (key, weeks) => { const d = new Date(key + 'T00:00:00'); d.setDate(d.getDate() + weeks * 7); return fmtD(d); };
+const weekOfDay = p => weekKey(new Date(p + 'T00:00:00'));
+function weekRangeLabel(key) {
+  const s = new Date(key + 'T00:00:00'), e = new Date(s); e.setDate(s.getDate() + 6);
+  return `${s.getMonth() + 1}/${s.getDate()}–${e.getMonth() + 1}/${e.getDate()}`;
+}
+// 目前要填的每週盤點 = 已結束的「上一個」週六～週五（例：今天在 7/4–7/10 這週，盤點的是 6/27–7/3）
+const currentReviewKey = () => shiftWeekKey(weekKey(), -1);
+function prevMonthStr() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; }
+const isSaturday = () => new Date().getDay() === 6;
+const isMonthEnd = () => { const d = new Date(); const t = new Date(d); t.setDate(d.getDate() + 1); return t.getDate() === 1; };
+// 打卡星星：合格的一天 +1 顆黃星星，集滿門檻且符合盤點條件才換 1 顆紫色超星
+const LAUNCH_WEEK = weekKey(new Date('2026-07-13T00:00:00')); // 上線週（2026-07-11 週六起）
+const weekStarGoal = wk => wk === LAUNCH_WEEK ? 5 : 7;         // 上線首週只有 5 天，門檻 5
+// 黃星星條件：業務執行至少低標 + 專注正向滋養至少一項 + 心情日記有填
+function dayQualifies(rec) {
+  const d = rec.data || rec;
+  const rel = d.rel ?? (d.rel_items || []).filter(Boolean).length;
+  const inv = d.inv ?? (d.inv_items || []).filter(Boolean).length;
+  const list = d.list ?? (d.list_items || []).filter(Boolean).length;
+  const lowMet = rel >= 3 && inv >= 0 && list >= 2;
+  const focusMet = (d.focus || []).length >= 1;
+  const diaryMet = !!(d.diary && String(d.diary).trim());
+  return lowMet && focusMet && diaryMet;
+}
+function starSlots(count, goal, gotSuper) {
+  let s = '';
+  for (let i = 0; i < goal; i++) s += `<span class="star ${i < count ? 'on' : ''}">★</span>`;
+  if (gotSuper) s += `<span class="superstar" title="紫色超星星">✦</span>`;
+  return s;
+}
+// 團隊獎勵星：全員當日皆得黃星星→該日「橘星」；全員該週皆得紫星→該週「彩虹星」
+function teamOrangeDays(daily, members, pred = () => true) {
+  if (!members.length) return [];
+  const ids = new Set(members.map(m => m.id)), map = {};
+  daily.forEach(r => { if (ids.has(r.user_id) && dayQualifies(r) && pred(r.period)) (map[r.period] ||= new Set()).add(r.user_id); });
+  return Object.keys(map).filter(d => map[d].size === members.length).sort().reverse();
+}
+function teamRainbowWeeks(weekly, members, pred = () => true) {
+  if (!members.length) return [];
+  const ids = new Set(members.map(m => m.id)), map = {};
+  weekly.forEach(r => { const d = r.data || r; if (ids.has(r.user_id) && d.super_star && pred(r.period)) (map[r.period] ||= new Set()).add(r.user_id); });
+  return Object.keys(map).filter(w => map[w].size === members.length).sort().reverse();
+}
+const ibvPoints = it => (Number(it.amount) || 0) / 32 * (Number(it.pct) || 0) / 100;
+const sumBV = items => (items || []).reduce((s, it) => s + (Number(it.bv) || 0), 0);
+const sumIBV = items => (items || []).reduce((s, it) => s + ibvPoints(it), 0);
+const fmt = n => (Math.round(n * 100) / 100).toLocaleString();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* =========================================================
+   資料層：demoApi（localStorage）/ supabaseApi 同介面
+   ========================================================= */
+let api;
+
+/* ---------- 示範模式 ---------- */
+const demoApi = (() => {
+  const KEY = 'star-db-v1', SES = 'star-session-v1';
+  const load = () => { const db = JSON.parse(localStorage.getItem(KEY) || 'null') || { users: [], teams: [], groups: [], daily: [], weekly: [], monthly: [], nudges: [], seq: 1 }; db.teams = db.teams || []; db.users.forEach(u => { if (!u.group_ids) u.group_ids = u.group_id ? [u.group_id] : []; }); return db; };
+  const save = db => localStorage.setItem(KEY, JSON.stringify(db));
+  const uid = db => String(db.seq++);
+  const me = () => {
+    const id = localStorage.getItem(SES);
+    if (!id) return null;
+    return load().users.find(u => u.id === id) || null;
+  };
+  const upsert = (table, match, data) => {
+    const db = load();
+    const i = db[table].findIndex(match);
+    if (i >= 0) db[table][i] = { ...db[table][i], ...data };
+    else db[table].push({ id: uid(db), ...data });
+    save(db);
+  };
+  // 每位組員的填寫狀況 + 每週黃星星/紫星軌跡（只回傳達成狀態，不含內容）
+  const memberStatusRows = (db, members) => {
+    const t = todayStr(), w = currentReviewKey(), m = monthStr();
+    return members.map(mm => {
+      const last7 = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; });
+      const done7 = last7.filter(ds => db.daily.some(r => r.user_id === mm.id && r.period === ds)).length;
+      const byW = {};
+      db.daily.filter(r => r.user_id === mm.id && dayQualifies(r)).forEach(r => { const wk = weekOfDay(r.period); byW[wk] = (byW[wk] || 0) + 1; });
+      const superW = {};
+      db.weekly.filter(r => r.user_id === mm.id && (r.data ? r.data.super_star : r.super_star)).forEach(r => superW[r.period] = true);
+      const weeks = [...new Set([...Object.keys(byW), ...Object.keys(superW)])].sort().reverse()
+        .map(wk => ({ wk, yellow: byW[wk] || 0, goal: weekStarGoal(wk), super: !!superW[wk] }));
+      return {
+        id: mm.id, name: mm.name, role: mm.role,
+        daily: db.daily.some(r => r.user_id === mm.id && r.period === t),
+        weekly: db.weekly.some(r => r.user_id === mm.id && r.period === w),
+        monthly: db.monthly.some(r => r.user_id === mm.id && r.period === m),
+        rate7: Math.round(done7 / 7 * 100),
+        yellowTotal: Object.values(byW).reduce((a, b) => a + b, 0),
+        superTotal: Object.keys(superW).length,
+        weeks,
+      };
+    });
+  };
+  return {
+    mode: 'demo',
+    async init() {},
+    async register(email, password, name) {
+      const db = load();
+      if (db.users.some(u => u.email === email)) throw new Error('這個 Email 已經註冊過了');
+      const first = db.users.length === 0;
+      const u = { id: uid(db), email, password, name, role: first ? 'admin' : 'member', is_super: first, team_id: null, group_ids: [] };
+      db.users.push(u); save(db); // 第一位註冊者＝最高管理員
+      localStorage.setItem(SES, u.id);
+      return u;
+    },
+    async login(email, password) {
+      const u = load().users.find(u => u.email === email && u.password === password);
+      if (!u) throw new Error('Email 或密碼不正確');
+      localStorage.setItem(SES, u.id);
+      return u;
+    },
+    async logout() { localStorage.removeItem(SES); },
+    async me() { return me(); },
+    async getRecord(table, period) {
+      const u = me();
+      return load()[table].find(r => r.user_id === u.id && r.period === period) || null;
+    },
+    async saveRecord(table, period, data) {
+      const u = me();
+      upsert(table, r => r.user_id === u.id && r.period === period, { user_id: u.id, period, ...data, updated_at: new Date().toISOString() });
+    },
+    async monthDaily(month) {
+      const u = me();
+      return load().daily.filter(r => r.user_id === u.id && r.period.startsWith(month));
+    },
+    async listMine(table) {
+      const u = me();
+      return load()[table].filter(r => r.user_id === u.id).sort((a, b) => b.period.localeCompare(a.period));
+    },
+    async myCapabilities() {   // 一人可同時是組長與業務組別管理員
+      const db = load(); const u = me();
+      return {
+        leadsTeam: db.teams.some(t => t.leader_id === u.id),
+        adminsGroup: db.groups.some(g => g.admin_id === u.id),
+      };
+    },
+    // ===== 守護者組別（team）：守護者帶的分組，用 team_id =====
+    async myTeam() {
+      const db = load(); const u = me();
+      return db.teams.find(t => t.leader_id === u.id || t.id === u.team_id) || null;
+    },
+    async createTeam(name) {           // 守護者建立自己的組別
+      const db = load(); const u = me();
+      const t = { id: uid(db), name, leader_id: u.id };
+      db.teams.push(t);
+      db.users.find(x => x.id === u.id).team_id = t.id;
+      save(db); return t;
+    },
+    async createTeamAsAdmin(name, leaderId) {  // 最高管理員建立守護者組別並指派守護者
+      const db = load(); const u = me();
+      if (!u.is_super) throw new Error('只有最高管理員可以新增守護者組別');
+      const t = { id: uid(db), name, leader_id: leaderId || null };
+      db.teams.push(t);
+      if (leaderId) {
+        const lu = db.users.find(x => x.id === leaderId);
+        lu.team_id = t.id;
+        if (lu.role === 'member') lu.role = 'leader'; // 指派者自動升為守護者
+      }
+      save(db); return t;
+    },
+    async listTeams() { return load().teams; },
+    async teamCompletion() {           // 組長看自己組別成員的狀況＋星星
+      const db = load(); const u = me();
+      const t = db.teams.find(t => t.leader_id === u.id || t.id === u.team_id);
+      if (!t) return { team: null, rows: [] };
+      const members = db.users.filter(x => x.team_id === t.id);
+      const orangeDays = teamOrangeDays(db.daily, members);
+      const rainbowWeeks = teamRainbowWeeks(db.weekly, members);
+      return { team: t, rows: memberStatusRows(db, members), orangeDays, rainbowWeeks };
+    },
+    async teamMemberRecords(memberId) { // 守護者看組員的每日/每週詳細資料
+      const db = load(); const u = me();
+      const t = db.teams.find(t => t.leader_id === u.id);
+      if (!t) throw new Error('只有守護者可以檢視組員詳細資料');
+      const mem = db.users.find(x => x.id === memberId && x.team_id === t.id);
+      if (!mem) throw new Error('此成員不在你的組別');
+      const sort = arr => arr.sort((a, b) => b.period.localeCompare(a.period));
+      return {
+        daily: sort(db.daily.filter(r => r.user_id === memberId)),
+        weekly: sort(db.weekly.filter(r => r.user_id === memberId)),
+      };
+    },
+    async allRecords() {               // 最高管理員統計用：取全部資料
+      const db = load(); const u = me();
+      if (!u.is_super) throw new Error('只有最高管理員可以檢視統計報表');
+      return { users: db.users.map(({ password, ...x }) => x), teams: db.teams, groups: db.groups, daily: db.daily, weekly: db.weekly, monthly: db.monthly };
+    },
+    // ===== 業務組別（group）：最高管理員建立、指派管理員，用 group_id =====
+    async createGroupAsAdmin(name) {
+      const db = load(); const u = me();
+      if (!u.is_super) throw new Error('只有最高管理員可以新增業務組別');
+      const g = { id: uid(db), name, admin_id: null };
+      db.groups.push(g); save(db); return g;
+    },
+    async groupStatus(groupId) {       // 業務組別管理員／最高管理員檢視某業務組別狀況＋星星
+      const db = load(); const u = me();
+      const g = db.groups.find(g => g.id === groupId);
+      if (!g) throw new Error('找不到業務組別');
+      if (!(u.is_super || g.admin_id === u.id)) throw new Error('只有此業務組別的管理員可以檢視');
+      const members = db.users.filter(x => (x.group_ids || []).includes(groupId));
+      return { group: g, rows: memberStatusRows(db, members) };
+    },
+    async sendNudge(toId, message) {
+      const db = load(); const u = me();
+      db.nudges.push({ id: uid(db), from_name: u.name, to_id: toId, message, date: todayStr() });
+      save(db);
+    },
+    async myNudges() { const u = me(); return load().nudges.filter(n => n.to_id === u.id); },
+    async clearNudges() { const db = load(); const u = me(); db.nudges = db.nudges.filter(n => n.to_id !== u.id); save(db); },
+    async listUsers() { return load().users.map(({ password, ...u }) => u); },
+    async listGroups() { return load().groups; },
+    async assignUser(userId, patch) {
+      const db = load();
+      Object.assign(db.users.find(u => u.id === userId), patch);
+      save(db);
+    },
+    async setGroupAdmin(groupId, adminId) {
+      const db = load();
+      db.groups.find(g => g.id === groupId).admin_id = adminId || null;
+      save(db);
+    },
+    async setUserGroups(userId, groupIds) {   // 一位成員可同時屬於多個業務組別
+      const db = load();
+      db.users.find(u => u.id === userId).group_ids = groupIds || [];
+      save(db);
+    },
+    async groupRecords(groupId) {
+      const db = load(); const u = me();
+      const g = db.groups.find(g => g.id === groupId);
+      if (!g || !(u.is_super || g.admin_id === u.id)) throw new Error('只有被指派為此業務組別管理員（或最高管理員）才能檢視資料');
+      const members = db.users.filter(x => (x.group_ids || []).includes(groupId));
+      const ids = new Set(members.map(m => m.id));
+      const nameOf = id => members.find(m => m.id === id)?.name || id;
+      const pick = table => db[table].filter(r => ids.has(r.user_id)).map(r => ({ ...r, name: nameOf(r.user_id) }));
+      return { daily: pick('daily'), weekly: pick('weekly'), monthly: pick('monthly') };
+    },
+    /* 示範資料 */
+    async seed() {
+      let db = load();
+      if (db.users.length) return load().users.map(u => u.email);
+      db = { users: [], teams: [], groups: [], daily: [], weekly: [], monthly: [], nudges: [], seq: 1 };
+      const mk = (email, name, role, sup = false) => { const u = { id: uid(db), email, password: '123456', name, role, is_super: sup, team_id: null, group_ids: [] }; db.users.push(u); return u; };
+      const admin = mk('admin@star.tw', '大衛', 'admin', true); // 最高管理員
+      const leader = mk('leader@star.tw', '小雅', 'leader');
+      const m1 = mk('mem@star.tw', '阿哲', 'member');
+      const m2 = mk('mem2@star.tw', '莉莉', 'member');
+      // 守護者組別（team）：小雅帶的北極星小組
+      const team = { id: uid(db), name: '北極星小組', leader_id: leader.id };
+      db.teams.push(team);
+      [leader, m1, m2].forEach(u => u.team_id = team.id);
+      // 業務組別（group）：與守護者組別各自獨立
+      const g = { id: uid(db), name: '北區業務組', admin_id: admin.id };   // 大衛管理
+      const g2 = { id: uid(db), name: '南區業務組', admin_id: leader.id }; // 小雅同時是組長＋業務組別管理員
+      db.groups.push(g, g2);
+      m1.group_ids = [g.id, g2.id];  // 阿哲 同時屬於 北區＋南區（示範跨業務組別）
+      m2.group_ids = [g2.id];        // 莉莉 → 南區（由小雅管理）
+      const teamMembers = [leader, m1, m2];
+      const pwKey = shiftWeekKey(currentReviewKey(), -1);
+      // 阿哲今天的豐富紀錄（示範每日打卡內容）
+      db.daily.push({ id: uid(db), user_id: m1.id, period: todayStr(),
+        rel_items: ['LINE 關心小明', '約小美喝咖啡', '回覆大寶訊息', '關心新朋友', '拜訪老客戶'],
+        inv_items: ['邀約小明來 PTM'], list_items: ['張新朋', '林新友'],
+        rel: 5, inv: 1, list: 2,
+        bv_items: [
+          { name: '魚油', bv: 30, cust_type: '新顧客', customer: '王太太' },
+          { name: '維他命C', bv: 25, cust_type: '舊顧客回購', customer: '李先生' },
+        ],
+        ibv_items: [{ name: '日用品', store: '夥伴商店A', pct: 2, amount: 3200 }],
+        focus: ['看書', 'Podcast'], diary: '今天跟兩位朋友聊了產品，反應不錯！', card: 5 });
+      // 全員在「本盤點週」與「上一盤點週」都合格打卡 → 團隊可得橘色星星
+      [currentReviewKey(), pwKey].forEach(wkKey => {
+        const start = new Date(wkKey + 'T00:00:00');
+        teamMembers.forEach(mem => {
+          for (let i = 0; i < 7; i++) {
+            const dt = new Date(start); dt.setDate(start.getDate() + i);
+            db.daily.push({ id: uid(db), user_id: mem.id, period: fmtD(dt), rel: 3, inv: 1, list: 2,
+              rel_items: ['關心A', '關心B', '關心C'], inv_items: ['邀約X'], list_items: ['名單1', '名單2'],
+              bv_items: [], ibv_items: [], focus: ['文章'], diary: '穩定執行中', card: (i * 5) % 36 + 1 });
+          }
+        });
+      });
+      // 上一盤點週：全員皆達成紫星 → 團隊可得彩虹星星
+      teamMembers.forEach((mem, idx) => {
+        db.weekly.push({ id: uid(db), user_id: mem.id, period: pwKey,
+          bv: 80 + idx * 20, ibv: 15 + idx * 5, achieved: 'yes', review: '上週兩訪略少，下週加強', custom: '完成 2 場產品體驗、新增 5 個名單',
+          visits: [{ name: '甲', type: '產品體驗' }, { name: '乙', type: 'PMT邀約' }],
+          top10: [...Array(10)].map((_, i) => ({ name: '名單' + (i + 1), strategy: '約體驗' })),
+          star_days: 7, super_star: true });
+      });
+      // 本盤點週：阿哲、小雅紫星，莉莉未達 → 本週非全員紫星（示範彩虹星需全員）
+      teamMembers.forEach((mem, idx) => {
+        db.weekly.push({ id: uid(db), user_id: mem.id, period: currentReviewKey(),
+          bv: 100 + idx * 30, ibv: 20 + idx * 10,
+          visits: [{ name: '甲', type: '產品體驗' }, { name: '乙', type: 'PMT邀約' }],
+          top10: [...Array(10)].map((_, i) => ({ name: '名單' + (i + 1), strategy: '約體驗' })),
+          star_days: 7, super_star: idx < 2 });
+      });
+      // 本月每人一筆月復盤（統計 BV/IBV/簽約店長/再推薦 排行用）
+      const mon = monthStr();
+      teamMembers.forEach((mem, idx) => {
+        db.monthly.push({ id: uid(db), user_id: mem.id, period: mon,
+          bv: 300 + idx * 120, ibv: 60 + idx * 25,
+          new_managers: [...Array(idx + 1)].map((_, k) => '店長' + (k + 1)),
+          referrals: [...Array(idx)].map((_, k) => '再推薦' + (k + 1)),
+          senior: '資深夥伴Amy' });
+      });
+      // 上個月一筆（上月對照）
+      const pmDate = new Date(); pmDate.setDate(1); pmDate.setMonth(pmDate.getMonth() - 1);
+      db.monthly.push({ id: uid(db), user_id: m1.id, period: `${pmDate.getFullYear()}-${pad(pmDate.getMonth() + 1)}`,
+        bv: 80, ibv: 15, new_managers: ['陳店長'], referrals: [], senior: '資深夥伴Amy', adjust: '增加店訪頻率', cheer: '上個月很棒！' });
+      save(db);
+      return db.users.map(u => u.email + '（密碼 123456）');
+    },
+  };
+})();
+
+/* ---------- Supabase 模式 ---------- */
+function makeSupabaseApi(sb) {
+  const table = { daily: 'daily_records', weekly: 'weekly_records', monthly: 'monthly_records' };
+  let cachedProfile = null;
+  async function profile() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+    if (cachedProfile?.id === user.id) return cachedProfile;
+    const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).single();
+    if (error) throw error;
+    cachedProfile = data; return data;
+  }
+  const throwIf = e => { if (e) throw new Error(e.message); };
+  return {
+    mode: 'supabase',
+    async init() {},
+    async register(email, password, name) {
+      const { error } = await sb.auth.signUp({ email, password, options: { data: { name } } });
+      throwIf(error);
+      return await profile();
+    },
+    async login(email, password) {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      throwIf(error);
+      cachedProfile = null;
+      return await profile();
+    },
+    async logout() { await sb.auth.signOut(); cachedProfile = null; },
+    async me() { try { return await profile(); } catch { return null; } },
+    async getRecord(t, period) {
+      const p = await profile();
+      const { data } = await sb.from(table[t]).select('*').eq('user_id', p.id).eq('period', period).maybeSingle();
+      return data;
+    },
+    async saveRecord(t, period, payload) {
+      const p = await profile();
+      const { error } = await sb.from(table[t]).upsert({ user_id: p.id, period, data: payload.data ?? payload, updated_at: new Date().toISOString() }, { onConflict: 'user_id,period' });
+      throwIf(error);
+    },
+    async monthDaily(month) {
+      const p = await profile();
+      const { data } = await sb.from(table.daily).select('*').eq('user_id', p.id).like('period', month + '%');
+      return data || [];
+    },
+    async listMine(t) {
+      const p = await profile();
+      const { data } = await sb.from(table[t]).select('*').eq('user_id', p.id).order('period', { ascending: false });
+      return data || [];
+    },
+    async myCapabilities() {
+      const p = await profile();
+      const [{ data: t }, { data: g }] = await Promise.all([
+        sb.from('teams').select('id').eq('leader_id', p.id).limit(1),
+        sb.from('groups').select('id').eq('admin_id', p.id).limit(1),
+      ]);
+      return { leadsTeam: !!(t && t.length), adminsGroup: !!(g && g.length) };
+    },
+    async myTeam() {
+      const p = await profile();
+      const { data } = await sb.from('teams').select('*').or(`leader_id.eq.${p.id}${p.team_id ? ',id.eq.' + p.team_id : ''}`).limit(1);
+      return (data && data[0]) || null;
+    },
+    async createTeam(name) {
+      const p = await profile();
+      const { data, error } = await sb.from('teams').insert({ name, leader_id: p.id }).select().single();
+      throwIf(error);
+      await sb.from('profiles').update({ team_id: data.id }).eq('id', p.id);
+      cachedProfile = null;
+      return data;
+    },
+    async createTeamAsAdmin(name, leaderId) {
+      const p = await profile();
+      if (!p.is_super) throw new Error('只有最高管理員可以新增守護者組別');
+      const { data, error } = await sb.from('teams').insert({ name, leader_id: leaderId || null }).select().single();
+      throwIf(error);
+      if (leaderId) {
+        const { data: lp } = await sb.from('profiles').select('role').eq('id', leaderId).single();
+        const patch = { team_id: data.id };
+        if (lp?.role === 'member') patch.role = 'leader';
+        await sb.from('profiles').update(patch).eq('id', leaderId);
+      }
+      return data;
+    },
+    async listTeams() { const { data } = await sb.from('teams').select('*'); return data || []; },
+    async createGroupAsAdmin(name) {
+      const p = await profile();
+      if (!p.is_super) throw new Error('只有最高管理員可以新增業務組別');
+      const { data, error } = await sb.from('groups').insert({ name }).select().single();
+      throwIf(error);
+      return data;
+    },
+    async teamCompletion() {
+      const { data, error } = await sb.rpc('team_completion');
+      throwIf(error);
+      const t = await this.myTeam();
+      // 星星軌跡（security definer RPC，只回傳達成數不含內容）
+      const { data: trails } = await sb.rpc('team_star_trails');
+      const byMember = {};
+      (trails || []).forEach(r => {
+        const m = (byMember[r.member_id] ||= { map: {} });
+        const cur = (m.map[r.week] ||= { wk: r.week, yellow: 0, goal: weekStarGoal(r.week), super: false });
+        cur.yellow = Math.max(cur.yellow, r.yellow || 0); cur.super = cur.super || r.is_super;
+      });
+      const rows = (data || []).map(r => {
+        const tt = byMember[r.id] || { map: {} };
+        const weeks = Object.values(tt.map).sort((a, b) => b.wk.localeCompare(a.wk));
+        return { ...r, weeks,
+          yellowTotal: weeks.reduce((a, w) => a + w.yellow, 0),
+          superTotal: weeks.filter(w => w.super).length };
+      });
+      // 團隊橘星/彩虹星（security definer RPC，只回傳日期/週別清單）
+      const { data: bonus } = await sb.rpc('team_bonus_stars');
+      const orangeDays = (bonus || []).filter(b => b.kind === 'orange').map(b => b.key);
+      const rainbowWeeks = (bonus || []).filter(b => b.kind === 'rainbow').map(b => b.key);
+      return { team: t, rows, orangeDays, rainbowWeeks };
+    },
+    async teamMemberRecords(memberId) { // 守護者看組員每日/每週詳細（RLS 需 is_team_leader_of_user 放行）
+      const [dd, ww] = await Promise.all([
+        sb.from(table.daily).select('*').eq('user_id', memberId).order('period', { ascending: false }),
+        sb.from(table.weekly).select('*').eq('user_id', memberId).order('period', { ascending: false }),
+      ]);
+      return { daily: dd.data || [], weekly: ww.data || [] };
+    },
+    async allRecords() {
+      const p = await profile();
+      if (!p.is_super) throw new Error('只有最高管理員可以檢視統計報表');
+      const [users, teams, groups, dd, ww, mm] = await Promise.all([
+        this.listUsers(), this.listTeams(), this.listGroups(),
+        sb.from(table.daily).select('*'), sb.from(table.weekly).select('*'), sb.from(table.monthly).select('*'),
+      ]);
+      return { users, teams, groups, daily: dd.data || [], weekly: ww.data || [], monthly: mm.data || [] };
+    },
+    async groupStatus(groupId) {
+      const users = await this.listUsers();
+      const members = users.filter(u => (u.group_ids || []).includes(groupId));
+      const ids = members.map(m => m.id);
+      const g = (await this.listGroups()).find(x => x.id === groupId);
+      const [dd, ww, mm2] = await Promise.all([
+        sb.from(table.daily).select('*').in('user_id', ids),
+        sb.from(table.weekly).select('*').in('user_id', ids),
+        sb.from(table.monthly).select('*').in('user_id', ids),
+      ]);
+      const dailies = dd.data || [], weeklies = ww.data || [], monthlies = mm2.data || [];
+      const t = todayStr(), w = currentReviewKey(), m = monthStr();
+      const rows = members.map(mm => {
+        const md = dailies.filter(r => r.user_id === mm.id), mw = weeklies.filter(r => r.user_id === mm.id);
+        const byW = {}, superW = {};
+        md.forEach(r => { if (dayQualifies(r)) { const wk = weekOfDay(r.period); byW[wk] = (byW[wk] || 0) + 1; } });
+        mw.forEach(r => { if ((r.data || r).super_star) superW[r.period] = true; });
+        const weeks = [...new Set([...Object.keys(byW), ...Object.keys(superW)])].sort().reverse()
+          .map(wk => ({ wk, yellow: byW[wk] || 0, goal: weekStarGoal(wk), super: !!superW[wk] }));
+        return { id: mm.id, name: mm.name, role: mm.role,
+          daily: md.some(r => r.period === t), weekly: mw.some(r => r.period === w),
+          monthly: monthlies.some(r => r.user_id === mm.id && r.period === m),
+          rate7: 0, yellowTotal: Object.values(byW).reduce((a, b) => a + b, 0), superTotal: Object.keys(superW).length, weeks };
+      });
+      return { group: g, rows };
+    },
+    async sendNudge(toId, message) {
+      const p = await profile();
+      const { error } = await sb.from('nudges').insert({ from_name: p.name, to_id: toId, message, date: todayStr() });
+      throwIf(error);
+    },
+    async myNudges() {
+      const p = await profile();
+      const { data } = await sb.from('nudges').select('*').eq('to_id', p.id);
+      return data || [];
+    },
+    async clearNudges() {
+      const p = await profile();
+      await sb.from('nudges').delete().eq('to_id', p.id);
+    },
+    async listUsers() {
+      const [{ data: profiles }, { data: gm }] = await Promise.all([
+        sb.from('profiles').select('*'),
+        sb.from('group_members').select('*'),
+      ]);
+      const byUser = {};
+      (gm || []).forEach(r => { (byUser[r.user_id] ||= []).push(r.group_id); });
+      return (profiles || []).map(p => ({ ...p, group_ids: byUser[p.id] || [] }));
+    },
+    async listGroups() { const { data } = await sb.from('groups').select('*'); return data || []; },
+    async assignUser(userId, patch) { const { error } = await sb.from('profiles').update(patch).eq('id', userId); throwIf(error); },
+    async setGroupAdmin(groupId, adminId) { const { error } = await sb.from('groups').update({ admin_id: adminId || null }).eq('id', groupId); throwIf(error); },
+    async setUserGroups(userId, groupIds) {
+      await sb.from('group_members').delete().eq('user_id', userId);
+      if (groupIds && groupIds.length) {
+        const { error } = await sb.from('group_members').insert(groupIds.map(gid => ({ group_id: gid, user_id: userId })));
+        throwIf(error);
+      }
+    },
+    async groupRecords(groupId) {
+      const users = await this.listUsers();
+      const members = users.filter(u => (u.group_ids || []).includes(groupId));
+      const nameOf = id => members.find(m => m.id === id)?.name || id;
+      const out = {};
+      for (const [k, t] of Object.entries(table)) {
+        const { data, error } = await sb.from(t).select('*').in('user_id', members.map(m => m.id));
+        throwIf(error);
+        out[k] = (data || []).map(r => ({ ...r, ...(r.data || {}), name: nameOf(r.user_id) }));
+      }
+      return out;
+    },
+    async seed() { throw new Error('Supabase 模式不支援示範資料'); },
+  };
+}
+
+/* =========================================================
+   UI
+   ========================================================= */
+const $ = s => document.querySelector(s);
+let currentUser = null, currentTab = 'daily';
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ---------- 背景星星（大小、亮度、節奏各異，約 1/4 為亮金星） ---------- */
+for (let i = 0; i < 52; i++) {
+  const t = document.createElement('div');
+  t.className = 'twinkle' + (i % 4 === 0 ? ' bright' : '');
+  const s = Math.random() * 3.5 + 1.2;
+  const dur = (Math.random() * 2.4 + 1.8).toFixed(2);
+  t.style.cssText = `left:${Math.random()*100}vw;top:${Math.random()*100}vh;width:${s}px;height:${s}px;animation-duration:${dur}s;animation-delay:${Math.random()*3}s`;
+  document.body.appendChild(t);
+}
+
+/* ---------- Auth ---------- */
+let authMode = 'login';
+function setAuthMode(m) {
+  authMode = m;
+  $('#tabLogin').classList.toggle('active', m === 'login');
+  $('#tabReg').classList.toggle('active', m === 'register');
+  $('#fName').style.display = m === 'register' ? '' : 'none';
+  $('#authBtn').textContent = m === 'login' ? '登入' : '註冊';
+  $('#authErr').textContent = '';
+}
+$('#tabLogin').onclick = () => setAuthMode('login');
+$('#tabReg').onclick = () => setAuthMode('register');
+$('#authBtn').onclick = async () => {
+  const email = $('#aEmail').value.trim(), pass = $('#aPass').value, name = $('#aName').value.trim();
+  $('#authErr').textContent = '';
+  try {
+    if (!email || !pass) throw new Error('請填寫 Email 與密碼');
+    if (authMode === 'register') {
+      if (!name) throw new Error('請填寫成員名字');
+      if (pass.length < 6) throw new Error('密碼至少 6 碼');
+      currentUser = await api.register(email, pass, name);
+      if (!currentUser) { $('#authErr').textContent = '註冊成功！請至信箱點擊驗證連結後登入。'; setAuthMode('login'); return; }
+    } else {
+      currentUser = await api.login(email, pass);
+    }
+    await enterApp();
+  } catch (e) { $('#authErr').textContent = e.message; }
+};
+$('#seedBtn')?.addEventListener('click', async e => {
+  e.preventDefault();
+  const list = await api.seed();
+  $('#seedList').innerHTML = '可用帳號：<br>' + list.join('<br>');
+  toast('示範資料已載入！');
+});
+$('#logoutBtn').onclick = async () => { await api.logout(); currentUser = null; $('#appView').classList.add('hidden'); $('#authView').classList.remove('hidden'); };
+
+/* ---------- App shell ---------- */
+async function enterApp() {
+  $('#authView').classList.add('hidden');
+  $('#appView').classList.remove('hidden');
+  $('#uName').textContent = currentUser.name;
+  // 依「實際關係」決定面板：可同時是組長與業務組別管理員
+  const caps = await api.myCapabilities();
+  const showLeader = caps.leadsTeam || currentUser.role === 'leader';
+  const showAdmin = currentUser.is_super || caps.adminsGroup;
+  const roleTags = [];
+  if (currentUser.is_super) roleTags.push('👑 最高管理員');
+  if (showLeader) roleTags.push('🌙 守護者');
+  if (caps.adminsGroup && !currentUser.is_super) roleTags.push('🏢 業務組別管理員');
+  if (roleTags.length === 0) roleTags.push(ROLE_EMOJI[currentUser.role] + ' ' + ROLE_LABEL[currentUser.role]);
+  $('#uRole').textContent = roleTags.join('・');
+  const tabs = [
+    { id: 'daily', label: '📝 每日打卡' },
+    { id: 'weekly', label: '🎯 每週盤點' },
+    { id: 'monthly', label: '🌕 每月累積' },
+    { id: 'history', label: '🌠 摘星軌跡' },
+  ];
+  if (showLeader) tabs.push({ id: 'leader', label: '🛡️ 守護者面板' });
+  if (showAdmin) tabs.push({ id: 'admin', label: '☀️ 管理面板' });
+  $('#tabs').innerHTML = tabs.map(t => `<button data-tab="${t.id}">${t.label}</button>`).join('');
+  $('#tabs').onclick = e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); };
+  showTab('daily');
+}
+
+async function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  const c = $('#content');
+  c.innerHTML = '<div class="panel"><span class="muted">載入中…</span></div>';
+  try {
+    if (tab === 'daily') await renderDaily(c);
+    if (tab === 'weekly') await renderWeekly(c);
+    if (tab === 'monthly') await renderMonthly(c);
+    if (tab === 'history') await renderHistory(c);
+    if (tab === 'leader') await renderLeader(c);
+    if (tab === 'admin') await renderAdmin(c);
+  } catch (e) {
+    c.innerHTML = `<div class="panel"><span class="err">${esc(e.message)}</span></div>`;
+  }
+}
+
+/* ---------- 逐項填寫清單 helper（字串陣列） ---------- */
+function simpleList(host, items, { max = 10, fixed = false, ph = '', onChange = () => {} } = {}) {
+  function render() {
+    host.innerHTML = items.map((v, i) => `
+      <div class="slrow">
+        <input data-i="${i}" value="${esc(v)}" placeholder="${ph}" maxlength="40">
+        ${!fixed && items.length > 1 ? `<button class="del" data-del="${i}">✕</button>` : ''}
+      </div>`).join('') +
+      (!fixed && items.length < max ? `<button class="btn small ghost" data-add style="margin-top:4px">＋ 增加項目</button>` : '');
+    host.querySelectorAll('input').forEach(inp => inp.oninput = () => { items[+inp.dataset.i] = inp.value; onChange(); });
+    host.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { items.splice(+b.dataset.del, 1); render(); onChange(); });
+    host.querySelector('[data-add]')?.addEventListener('click', () => { items.push(''); render(); onChange(); });
+  }
+  render();
+}
+
+/* ---------- 動態表格 helper ---------- */
+function dynTable(host, cols, rows, onChange) {
+  function cellHTML(c, r, i) {
+    if (c.type === 'computed') return `<span class="computed-cell" data-i="${i}" data-k="${c.key}">${c.compute(r)}</span>`;
+    if (c.type === 'select') return `
+      <select data-i="${i}" data-k="${c.key}">
+        <option value="">— 選擇 —</option>
+        ${c.options.map(o => `<option ${r[c.key] === o ? 'selected' : ''}>${o}</option>`).join('')}
+      </select>`;
+    return `<input data-i="${i}" data-k="${c.key}" type="${c.type || 'text'}" value="${esc(r[c.key] ?? '')}" placeholder="${c.ph || ''}">`;
+  }
+  const refreshComputed = () => host.querySelectorAll('.computed-cell').forEach(sp => {
+    sp.textContent = cols.find(c => c.key === sp.dataset.k).compute(rows[+sp.dataset.i]);
+  });
+  function render() {
+    host.innerHTML = `
+      <table class="dyn">
+        <thead><tr>${cols.map(c => `<th>${c.label}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${rows.map((r, i) => `
+          <tr>${cols.map(c => `<td style="min-width:${c.w || 90}px">${cellHTML(c, r, i)}</td>`).join('')}
+          <td><button class="del" data-del="${i}">✕</button></td></tr>`).join('')}
+        </tbody>
+      </table>
+      <button class="btn small ghost" data-add style="margin-top:8px">＋ 增加項目</button>`;
+    host.querySelectorAll('input, select').forEach(el => el[el.tagName === 'SELECT' ? 'onchange' : 'oninput'] = () => {
+      rows[+el.dataset.i][el.dataset.k] = el.value;
+      refreshComputed();
+      onChange();
+    });
+    host.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { rows.splice(+b.dataset.del, 1); render(); onChange(); });
+    host.querySelector('[data-add]').onclick = () => { rows.push({}); render(); onChange(); };
+  }
+  render();
+  return rows;
+}
+
+/* =========================================================
+   每日打卡
+   ========================================================= */
+async function renderDaily(c) {
+  const t = todayStr();
+  const rec = await api.getRecord('daily', t);
+  const d = rec?.data || rec || {};
+  const nudges = await api.myNudges();
+
+  c.innerHTML = `
+    ${nudges.length ? `<div class="banner nudge">🔔 ${nudges.map(n => `<b>${esc(n.from_name)}</b> 提醒你：${esc(n.message)}（${n.date}）`).join('　')}
+      <button class="btn small ghost" id="clearNudge">知道了</button></div>` : ''}
+    <div class="panel">
+      <h2>📝 每日打卡 <span class="muted">${t}</span> <span id="barStat"></span></h2>
+      <h3 class="hd-blue">💧 每日業務執行 <span class="muted">高標：10 建立關係／3 邀約碰面／2 名單　低標：3 建立關係／0 邀約碰面／2 名單</span></h3>
+      <div class="trio">
+        <div class="cell"><label>建立關係 <span class="countpill" id="relCount"></span></label><div id="dRelList"></div><span class="goalhint">低標 3｜高標 10・最多 10 項</span></div>
+        <div class="cell"><label>邀約碰面 <span class="countpill" id="invCount"></span></label><div id="dInvList"></div><span class="goalhint">低標 0｜高標 3・最多 3 項</span></div>
+        <div class="cell"><label>增加名單 <span class="countpill" id="listCount"></span></label><div id="dListList"></div><span class="goalhint">低標 2｜高標 2</span></div>
+      </div>
+
+      <h3 class="hd-red">🔥 零售品項紀錄 — BV</h3>
+      <div id="bvTable"></div>
+      <div class="totalline">今日 BV 總額：<span id="bvTotal">0</span></div>
+
+      <h3 class="hd-red">🔥 零售品項紀錄 — IBV <span class="muted">IBV點數 = 銷售總金額 ÷ 32 × 商店IBV%</span></h3>
+      <div id="ibvTable"></div>
+      <div class="totalline">今日 IBV 總額：<span id="ibvTotal">0</span></div>
+
+      <h3 class="hd-earth">🪵 專注正向滋養（複選）</h3>
+      <div class="checks" id="dFocus">
+        ${FOCUS_OPTS.map(o => `<label><input type="checkbox" value="${o}" ${(d.focus || []).includes(o) ? 'checked' : ''}>${o}</label>`).join('')}
+      </div>
+      <textarea class="diary" id="dLearn" style="min-height:80px;margin-top:10px" placeholder="學習重點筆記＆紀錄心得…">${esc(d.learn || '')}</textarea>
+
+      <h3 class="hd-gray">༄ NOVA 摘星牌卡 <span class="muted">NOVA Rising Stars ・ 36 CARDS OF GROWTH</span></h3>
+      <div class="novahint" style="text-align:center">不管抽到哪張卡，都在做同一件事：建立你的生意節奏，並和他人建立正循環。</div>
+      <div class="cardzone" style="flex-direction:column">
+        <div id="cardBack" ${rec && d.card ? 'style="display:none"' : ''} style="text-align:center">
+          <button class="cardback" id="cardBackBtn">${novaBackSVG()}</button>
+          <div class="muted" style="margin-top:8px">輕觸翻牌 🔮（36 張隨機・存檔後鎖定）</div>
+        </div>
+        <div id="cardSlot">${d.card ? drawnCardHTML(d.card, !!rec) : ''}</div>
+        <div class="novaphrase" style="text-align:center;margin-top:14px;line-height:0.5">Every small action brings you closer to your own star.</div>
+        <div class="novaphrase zh" style="text-align:center;line-height:0.5">每一個小行動，都讓你離自己的星星更近一步。</div>
+      </div>
+
+      <h3 class="hd-gray">༄ 每日行動反思與心情日記 <span class="muted">最多 500 字</span></h3>
+      <textarea class="diary" id="dDiary" maxlength="500" placeholder="今天的行動反思、心情、感恩、觀察…">${esc(d.diary || '')}</textarea>
+      <div class="charcount"><span id="dCount">0</span> / 500</div>
+
+      <div class="savebar">
+        <span class="savedmark" id="dSaved">${rec ? '✓ 今日已打卡（可再修改）' : ''}</span>
+        <button class="btn gold" id="dSave">💾 存檔打卡</button>
+      </div>
+    </div>`;
+
+  if (nudges.length) $('#clearNudge').onclick = async () => { await api.clearNudges(); showTab('daily'); };
+
+  const bvRows = d.bv_items?.length ? structuredClone(d.bv_items) : [{}];
+  const ibvRows = d.ibv_items?.length ? structuredClone(d.ibv_items) : [{}];
+  const relItems = d.rel_items?.length ? [...d.rel_items] : [''];
+  const invItems = d.inv_items?.length ? [...d.inv_items] : [''];
+  const listItems = [d.list_items?.[0] || '', d.list_items?.[1] || ''];
+  let card = d.card || null;
+  const cardLocked = !!(rec && d.card);
+
+  const filled = arr => arr.filter(s => String(s).trim()).length;
+  const refresh = () => {
+    $('#bvTotal').textContent = fmt(sumBV(bvRows));
+    $('#ibvTotal').textContent = fmt(sumIBV(ibvRows));
+    $('#dCount').textContent = $('#dDiary').value.length;
+    const rel = filled(relItems), inv = filled(invItems), list = filled(listItems);
+    $('#relCount').textContent = `${rel}/10`;
+    $('#invCount').textContent = `${inv}/3`;
+    $('#listCount').textContent = `${list}/2`;
+    const stat = $('#barStat');
+    if (rel >= 10 && inv >= 3 && list >= 2) stat.innerHTML = '<span class="pillstat high">🌟 高標達成！</span>';
+    else if (rel >= 3 && inv >= 0 && list >= 2) stat.innerHTML = '<span class="pillstat low">✨ 低標達成</span>';
+    else stat.innerHTML = '<span class="pillstat none">未達低標</span>';
+  };
+  simpleList($('#dRelList'), relItems, { max: 10, ph: '對象／內容，例：LINE 關心小明', onChange: refresh });
+  simpleList($('#dInvList'), invItems, { max: 3, ph: '邀約碰面對象／內容', onChange: refresh });
+  simpleList($('#dListList'), listItems, { max: 2, fixed: true, ph: '新名單人名', onChange: refresh });
+  dynTable($('#bvTable'), [
+    { key: 'name', label: '銷售產品品項', ph: '例：魚油', w: 130 },
+    { key: 'bv', label: '銷售BV點數', type: 'number', w: 100 },
+    { key: 'cust_type', label: '顧客類型', type: 'select', options: CUSTOMER_TYPES, w: 150 },
+    { key: 'customer', label: '顧客', ph: '顧客姓名', w: 110 },
+  ], bvRows, refresh);
+  dynTable($('#ibvTable'), [
+    { key: 'name', label: '銷售產品品項', ph: '例：日用品', w: 120 },
+    { key: 'store', label: '夥伴商店名稱', w: 120 },
+    { key: 'pct', label: '商店IBV%', type: 'number', w: 90 },
+    { key: 'amount', label: '銷售總金額', type: 'number', w: 110 },
+    { key: 'ibv_pts', label: '銷售IBV點數', type: 'computed', w: 100, compute: r => fmt(ibvPoints(r)) },
+  ], ibvRows, refresh);
+  $('#dDiary').oninput = refresh;
+  refresh();
+
+  if (!cardLocked) {
+    const draw = () => {
+      card = Math.floor(Math.random() * 36) + 1;   // 36 張純亂數，無規則
+      $('#cardBack').style.display = 'none';
+      $('#cardSlot').innerHTML = drawnCardHTML(card, false);
+      $('#cardSlot .drawncard').onclick = draw;    // 點卡片可重抽
+    };
+    $('#cardBackBtn').onclick = draw;
+    if (card) $('#cardSlot .drawncard').onclick = draw; // 已抽未存檔時仍可重抽
+  }
+  // 一鍵分享當天牌卡到 IG 限時動態（用委派，避免點到卡片而重抽）
+  $('#cardSlot').addEventListener('click', e => {
+    const b = e.target.closest('[data-share-card]');
+    if (b) { e.stopPropagation(); shareCardImage(+b.dataset.shareCard); }
+  });
+
+  $('#dSave').onclick = async () => {
+    const data = {
+      rel_items: relItems.map(s => s.trim()).filter(Boolean),
+      inv_items: invItems.map(s => s.trim()).filter(Boolean),
+      list_items: listItems.map(s => s.trim()),
+      rel: filled(relItems), inv: filled(invItems), list: filled(listItems),
+      bv_items: bvRows.filter(r => r.name || r.bv),
+      ibv_items: ibvRows.filter(r => r.name || r.amount),
+      bv_total: sumBV(bvRows), ibv_total: sumIBV(ibvRows),
+      focus: [...document.querySelectorAll('#dFocus input:checked')].map(i => i.value),
+      learn: $('#dLearn').value,
+      diary: $('#dDiary').value, card,
+    };
+    await api.saveRecord('daily', t, { data });
+    toast('🌟 打卡成功！');
+    showTab('daily');
+  };
+}
+function novaMotifSVG(el) {
+  return `<svg viewBox="0 0 100 100" width="120" height="120" aria-hidden="true">
+    <clipPath id="nc"><circle cx="50" cy="50" r="46"/></clipPath>
+    <circle cx="50" cy="50" r="46" fill="${el.color}22"/>
+    <path d="M0 60 Q50 46 100 62 V100 H0 Z" fill="${el.color}33" clip-path="url(#nc)"/>
+    <circle cx="66" cy="36" r="9" fill="${el.color}"/>
+  </svg>`;
+}
+/* NOVA 覆蓋牌（牌背）— 深炭底、金色星芒、星座 */
+function novaBackSVG() {
+  let rays = '';
+  for (let a = 0; a < 360; a += 30) {
+    const r = a * Math.PI / 180;
+    rays += `<line x1="${(150 + Math.cos(r) * 14).toFixed(1)}" y1="${(150 + Math.sin(r) * 14).toFixed(1)}" x2="${(150 + Math.cos(r) * 31).toFixed(1)}" y2="${(150 + Math.sin(r) * 31).toFixed(1)}"/>`;
+  }
+  const dots = [[95,150,2,'#c9a84a'],[172,118,2.6,'#c9a84a'],[210,92,3,'#c9a84a'],[240,150,2.4,'#efe9dd'],[80,215,2,'#8f877a'],[150,86,1.6,'#c9a84a'],[250,108,2,'#c9a84a'],[112,300,2,'#c9a84a'],[242,285,3,'#c9a84a'],[285,235,1.6,'#8f877a'],[95,255,1.6,'#8f877a'],[214,322,2,'#efe9dd']]
+    .map(([cx,cy,r,f]) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${f}"/>`).join('');
+  return `<svg viewBox="0 0 300 430" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+      style="font-family:'Helvetica Neue',Arial,'PingFang TC',sans-serif">
+    <rect x="0" y="0" width="300" height="430" rx="20" fill="#36312b"/>
+    <rect x="12" y="12" width="276" height="406" rx="14" fill="none" stroke="rgba(210,198,176,.32)" stroke-width="1"/>
+    <line x1="55" y1="82" x2="150" y2="140" stroke="rgba(210,198,176,.16)" stroke-width="1"/>
+    <line x1="165" y1="345" x2="255" y2="315" stroke="rgba(210,198,176,.16)" stroke-width="1"/>
+    ${dots}
+    <g stroke="#c9a84a" stroke-width="2.1" stroke-linecap="round">${rays}</g>
+    <circle cx="150" cy="150" r="6.5" fill="#c9a84a"/>
+    <text x="150" y="238" text-anchor="middle" font-size="58" font-weight="300" letter-spacing="14" fill="#efe9dd">NOVA</text>
+    <text x="150" y="282" text-anchor="middle" font-size="21" letter-spacing="11" fill="#d6cdbf">新心摘星牌卡</text>
+    <line x1="132" y1="303" x2="168" y2="303" stroke="#c9a84a" stroke-width="1.5"/>
+    <text x="150" y="335" text-anchor="middle" font-size="13" letter-spacing="6" fill="#8f877a">36 CARDS OF GROWTH</text>
+    <text x="150" y="406" text-anchor="middle" font-size="11" fill="#8f877a" textLength="244" lengthAdjust="spacingAndGlyphs">Every small action brings you closer to your own star.</text>
+  </svg>`;
+}
+function drawnCardHTML(n, locked) {
+  const el = novaEl(n), card = NOVA_CARDS[n - 1];
+  return `<div class="drawncard nova" style="background:linear-gradient(160deg,${el.bg1},${el.bg2});border-color:${el.color}">
+    <div class="nc-head" style="color:${el.ink}">
+      <span class="nc-num">${String(n).padStart(2, '0')}</span>
+      <span class="nc-el">${el.en}　${el.cn}・${el.chap}</span>
+    </div>
+    <div class="nc-title" style="color:${el.ink}">· ${esc(card.t)} ·</div>
+    <div class="nc-motif">${novaMotifSVG(el)}</div>
+    <div class="nc-sec"><b style="color:${el.ink}">今日訊息</b><p>${esc(card.m)}</p></div>
+    <div class="nc-sec"><b style="color:${el.ink}">今日行動</b><p>${esc(card.a)}</p></div>
+    <div class="nc-foot">· 36 CARDS OF GROWTH ·</div>
+    <div class="locktag" style="color:${el.color}">${locked ? '🔒 今日已鎖定' : '點卡片可重抽・存檔後鎖定'}</div>
+  </div>
+  <button class="btn small sharecard" data-share-card="${n}">📤 分享到 IG 限時動態</button>`;
+}
+
+/* ---------- 牌卡分享圖（IG 限時動態 9:16） ---------- */
+function cvRoundRect(x, X, Y, w, h, r) {
+  x.beginPath(); x.moveTo(X + r, Y);
+  x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r);
+  x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath();
+}
+function cvWrap(x, text, cx, y, maxW, lh) {
+  const tokens = String(text).match(/[A-Za-z0-9.,'"!?%\-]+|\s+|[^\sA-Za-z0-9]/g) || [text];
+  const lines = []; let line = '';
+  for (const tk of tokens) {
+    const test = line + tk;
+    if (x.measureText(test).width > maxW && line.trim()) { lines.push(line.trim()); line = tk.replace(/^\s+/, ''); }
+    else line = test;
+  }
+  if (line.trim()) lines.push(line.trim());
+  lines.forEach((ln, i) => x.fillText(ln, cx, y + i * lh));
+  return lines.length;
+}
+function makeCardBlob(n) {
+  return new Promise(resolve => {
+    const el = novaEl(n), card = NOVA_CARDS[n - 1];
+    const W = 1080, H = 1920, zh = '"PingFang TC","Microsoft JhengHei",sans-serif';
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    // 大地色底
+    const g = x.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#c3b9a9'); g.addColorStop(.55, '#b3a897'); g.addColorStop(1, '#a89c88');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.textAlign = 'center';
+    x.fillStyle = '#3f362a'; x.font = '800 60px Georgia,"Songti TC",serif';
+    x.fillText('✦  NOVA 新心摘星牌卡  ✦', W / 2, 150);
+    x.fillStyle = '#6b5c46'; x.font = '700 26px sans-serif';
+    x.fillText('36 CARDS OF GROWTH', W / 2, 200);
+    // 卡片（元素色）
+    const cw = 780, ch = 1360, cx = (W - cw) / 2, cy = 270;
+    cvRoundRect(x, cx, cy, cw, ch, 44);
+    const cg = x.createLinearGradient(cx, cy, cx, cy + ch); cg.addColorStop(0, el.bg1); cg.addColorStop(1, el.bg2);
+    x.fillStyle = cg; x.fill(); x.lineWidth = 4; x.strokeStyle = el.color; x.stroke();
+    // 卡頭：編號 + 元素
+    x.textAlign = 'left'; x.fillStyle = el.ink;
+    x.font = '800 66px Georgia,serif'; x.fillText(String(n).padStart(2, '0'), cx + 56, cy + 120);
+    x.font = '700 26px sans-serif'; x.fillText(`${el.en}   ${el.cn}・${el.chap}`, cx + 160, cy + 112);
+    x.strokeStyle = el.color + '55'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx + 56, cy + 150); x.lineTo(cx + cw - 56, cy + 150); x.stroke();
+    // 標題
+    x.textAlign = 'center'; x.fillStyle = el.ink; x.font = '900 76px ' + zh;
+    x.fillText(`·  ${card.t}  ·`, W / 2, cy + 270);
+    // 元素圓形圖騰
+    x.save(); x.beginPath(); x.arc(W / 2, cy + 470, 130, 0, 7); x.clip();
+    x.fillStyle = el.color + '22'; x.fillRect(cx, cy + 340, cw, 260);
+    x.fillStyle = el.color + '44'; x.beginPath(); x.moveTo(cx, cy + 500); x.quadraticCurveTo(W / 2, cy + 455, cx + cw, cy + 505); x.lineTo(cx + cw, cy + 600); x.lineTo(cx, cy + 600); x.fill();
+    x.restore();
+    x.fillStyle = el.color; x.beginPath(); x.arc(W / 2 + 55, cy + 430, 26, 0, 7); x.fill();
+    // 今日訊息 / 今日行動
+    x.textAlign = 'left';
+    x.fillStyle = el.ink; x.font = '800 30px ' + zh; x.fillText('今日訊息', cx + 70, cy + 680);
+    x.fillStyle = '#5a5044'; x.font = '600 32px ' + zh;
+    let yy = cvWrap(x, card.m, cx + 70, cy + 730, cw - 140, 48, 'left');
+    const y2 = cy + 730 + yy * 48 + 44;
+    x.fillStyle = el.ink; x.font = '800 30px ' + zh; x.fillText('今日行動', cx + 70, y2);
+    x.fillStyle = '#5a5044'; x.font = '600 32px ' + zh;
+    cvWrap(x, card.a, cx + 70, y2 + 50, cw - 140, 48, 'left');
+    // 卡底
+    x.textAlign = 'center'; x.fillStyle = el.color + 'aa'; x.font = '700 24px sans-serif';
+    x.fillText('·  36 CARDS OF GROWTH  ·', W / 2, cy + ch - 40);
+    // 品牌落款
+    x.fillStyle = '#4a4034'; x.font = '700 30px ' + zh;
+    x.fillText('Every small action brings you closer to your own star.', W / 2, H - 96);
+    x.fillStyle = '#6b5c46';
+    x.fillText('每一個小行動，都讓你離自己的星星更近一步。', W / 2, H - 52);
+    c.toBlob(b => resolve(b), 'image/png');
+  });
+}
+async function shareCardImage(n) {
+  const blob = await makeCardBlob(n);
+  const file = new File([blob], `nova-摘星牌卡-${n}.png`, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'NOVA 摘星牌卡', text: `今天的 NOVA 摘星牌卡 ✦ 第 ${n} 號` });
+      toast('已開啟分享，選 Instagram 限時動態即可 📤');
+    } catch (e) { /* 使用者取消 */ }
+  } else {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    toast('已下載卡片圖，開啟 IG 限時動態上傳即可 📥');
+  }
+}
+
+/* =========================================================
+   每週目標
+   ========================================================= */
+async function renderWeekly(c) {
+  const w = currentReviewKey();               // 要盤點的週（已結束的週六～週五）
+  const pw = shiftWeekKey(w, -1);             // 再上一週（比較基準）
+  const rec = await api.getRecord('weekly', w);
+  const prev = await api.getRecord('weekly', pw);
+  const d = rec?.data || rec || {};
+  const pd = prev?.data || prev || {};
+  const visits = d.visits?.length ? structuredClone(d.visits) : [{}, {}];
+
+  // 該盤點週的每日打卡黃星星（合格天數）
+  const dailies = await api.listMine('daily');
+  const dayCount = dailies.filter(r => weekOfDay(r.period) === w && dayQualifies(r)).length;
+  const goal = weekStarGoal(w);
+  let refreshSuper = () => {};   // 稍後定義（供 topCount / visits 事件呼叫）
+  let gotSuper = false;
+
+  c.innerHTML = `
+    ${isSaturday() ? '<div class="banner sat">📅 今天是週六，記得完成上一週（週六～週五）的每週盤點！</div>' : ''}
+    <div class="panel">
+      <h2>🎯 每週盤點 <span class="muted">盤點區間 ${weekRangeLabel(w)}（上一個週六～週五）</span></h2>
+
+      <h3>✦ 打卡星星 <span class="muted">合格的一天得 1 顆黃星星（業務至少低標＋專注正向滋養≥1＋心情日記），集滿 ${goal} 顆並符合下列條件換 1 顆紫色超星${w === LAUNCH_WEEK ? '（上線首週 5 顆即達標）' : ''}</span></h3>
+      <div class="starrow" id="wStarRow">${starSlots(dayCount, goal, false)}</div>
+      <div class="muted" style="margin-bottom:6px">本週合格打卡 <b>${dayCount}</b> 天（黃星星）</div>
+      <div id="superChecklist" class="superbox"></div>
+
+      <h3 class="hd-blue">💧 TOP 10 名單 <span class="countpill" id="topCount"></span> <span class="muted">填寫 10 組：名單、跟進策略</span></h3>
+      <div id="wTop10"></div>
+
+      <h3 class="hd-blue">💧 上週兩訪</h3>
+      <div id="wVisits"></div>
+
+      <h3 class="hd-earth">🪵 參與培訓（複選）</h3>
+      <div class="checks" id="wTrain">
+        ${TRAININGS.map(o => `<label><input type="checkbox" value="${o}" ${(d.trainings || []).includes(o) ? 'checked' : ''}>${o}</label>`).join('')}
+      </div>
+
+      <h3 class="hd-red">🔥 本週累加 BV / IBV <span class="muted">以 UFMS 後台 CSIE 報表數字填寫・上週：BV ${pd.bv ?? '—'}／IBV ${pd.ibv ?? '—'}</span></h3>
+      <div class="trio">
+        <div class="cell"><label>本週 BV</label><input type="number" min="0" id="wBV" value="${d.bv ?? ''}"><span class="goalhint" id="wBVhint"></span></div>
+        <div class="cell"><label>本週 IBV</label><input type="number" min="0" id="wIBV" value="${d.ibv ?? ''}"><span class="goalhint" id="wIBVhint"></span></div>
+      </div>
+
+      <h3 class="hd-gray">༄ 上週目標是否達成？</h3>
+      ${pd.custom
+        ? `<div class="prevgoal">🎯 上週目標：${esc(pd.custom)}</div>`
+        : '<div class="muted" style="margin-bottom:8px">（上週未填寫自訂週目標）</div>'}
+      <div class="checks">
+        <label><input type="radio" name="wAch" value="yes" ${d.achieved === 'yes' ? 'checked' : ''}>✅ 有達成</label>
+        <label><input type="radio" name="wAch" value="no" ${d.achieved === 'no' ? 'checked' : ''}>❌ 未達成</label>
+      </div>
+      <textarea class="diary" id="wReview" style="min-height:70px;margin-top:10px" placeholder="重新檢視週目標：這週的目標完成得如何？哪裡可以更好？">${esc(d.review || '')}</textarea>
+
+      <h3 class="hd-gray">༄ 重新計劃下一週目標節奏</h3>
+      <p class="muted" style="margin-bottom:8px;line-height:1.7">建立達成目標節奏：不斷對齊行動與目標，練習跟自己站在一起累積小成功經驗。</p>
+      <textarea class="diary" id="wGoal" style="min-height:70px" placeholder="下一週我要…">${esc(d.custom || '')}</textarea>
+
+      <div class="savebar">
+        <span class="savedmark">${rec ? '✓ 本週已填寫（可再修改）' : ''}</span>
+        <button class="btn gold" id="wSave">💾 儲存每週盤點</button>
+      </div>
+    </div>`;
+
+  // TOP 10 名單：固定 10 列（名單、跟進策略）
+  const top10 = [...Array(10)].map((_, i) => ({ name: d.top10?.[i]?.name || '', strategy: d.top10?.[i]?.strategy || '' }));
+  const topCount = () => { $('#topCount').textContent = top10.filter(r => r.name.trim() || r.strategy.trim()).length + '/10'; };
+  $('#wTop10').innerHTML = `
+    <table class="dyn">
+      <thead><tr><th style="width:34px">#</th><th>名單</th><th>跟進策略</th></tr></thead>
+      <tbody>${top10.map((r, i) => `
+        <tr>
+          <td class="muted" style="font-weight:900">${i + 1}</td>
+          <td style="min-width:120px"><input data-i="${i}" data-k="name" value="${esc(r.name)}" placeholder="人名"></td>
+          <td style="min-width:180px"><input data-i="${i}" data-k="strategy" value="${esc(r.strategy)}" placeholder="例：約產品體驗、送資料"></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  $('#wTop10').querySelectorAll('input').forEach(inp => inp.oninput = () => {
+    top10[+inp.dataset.i][inp.dataset.k] = inp.value;
+    topCount(); refreshSuper();
+  });
+  topCount();
+
+  dynTable($('#wVisits'), [
+    { key: 'name', label: '人名', w: 130 },
+    { key: 'type', label: '建立關係類型', type: 'select', options: CARE_TYPES, w: 170 },
+    { key: 'other', label: '其他（選「其他」時填寫）', w: 150 },
+  ], visits, () => refreshSuper());
+
+  const filledVisits = () => visits.filter(v => (v.name || '').trim()).length;
+  const filledTop10 = () => top10.filter(r => (r.name || '').trim()).length;
+  refreshSuper = () => {
+    const bv = +$('#wBV').value || 0;
+    const c1 = dayCount >= goal;
+    const c2 = pd.bv != null ? bv > +pd.bv : bv > 0;
+    const c3 = filledVisits() >= 2;
+    const c4 = filledTop10() >= 10;
+    gotSuper = c1 && c2 && c3 && c4;
+    $('#wStarRow').innerHTML = starSlots(dayCount, goal, gotSuper);
+    const item = (ok, t) => `<div class="chk ${ok ? 'ok' : ''}">${ok ? '✅' : '⬜'} ${t}</div>`;
+    $('#superChecklist').innerHTML =
+      `<div class="superhd">🌟 紫色超星星條件${gotSuper ? '：已達成，恭喜！' : '（全部達成才可獲得）'}</div>` +
+      item(c1, `每週集滿 ${goal} 顆黃星星（目前 ${dayCount}）`) +
+      item(c2, `盤點 BV 高於上週（上週 ${pd.bv ?? 0}）`) +
+      item(c3, `完成上週兩訪（目前 ${filledVisits()}/2）`) +
+      item(c4, `列下 TOP 10 名單（目前 ${filledTop10()}/10）`);
+  };
+
+  const hint = () => {
+    const bv = +$('#wBV').value || 0, ibv = +$('#wIBV').value || 0;
+    $('#wBVhint').textContent = pd.bv != null ? (bv > +pd.bv ? '📈 比上週增加！' : '需高於上週 ' + pd.bv) : '（無上週資料，>0 即可）';
+    $('#wIBVhint').textContent = pd.ibv != null ? (ibv > +pd.ibv ? '📈 比上週增加！' : '需高於上週 ' + pd.ibv) : '（無上週資料）';
+    refreshSuper();
+  };
+  $('#wBV').oninput = hint; $('#wIBV').oninput = hint; hint();
+
+  $('#wSave').onclick = async () => {
+    const data = {
+      top10: top10.filter(r => r.name.trim() || r.strategy.trim()),
+      visits: visits.filter(v => v.name || v.type),
+      trainings: [...document.querySelectorAll('#wTrain input:checked')].map(i => i.value),
+      bv: +$('#wBV').value || 0, ibv: +$('#wIBV').value || 0,
+      achieved: document.querySelector('[name=wAch]:checked')?.value || '',
+      review: $('#wReview').value,
+      custom: $('#wGoal').value,
+      star_days: dayCount, super_star: gotSuper,
+    };
+    await api.saveRecord('weekly', w, { data });
+    toast('🎯 每週盤點已儲存！');
+    showTab('weekly');
+  };
+}
+
+/* =========================================================
+   每月復盤
+   ========================================================= */
+async function renderMonthly(c) {
+  const m = monthStr();
+  const rec = await api.getRecord('monthly', m);
+  const d = rec?.data || rec || {};
+  const pm = prevMonthStr();
+  const prevRec = await api.getRecord('monthly', pm);
+  const pdM = prevRec?.data || prevRec || {};
+  const newMgrs = d.new_managers?.length ? [...d.new_managers] : [''];
+  const refMgrs = d.referrals?.length ? [...d.referrals] : [''];
+
+  // 季度進度表標題（如 7 月屬 Q3 → 「7月-9月份進度表」）；依最新月份填寫數字顯示，不累加
+  const mon = +m.slice(5, 7);
+  const qStart = Math.floor((mon - 1) / 3) * 3 + 1;
+  const qLabel = `${qStart}月-${qStart + 2}月份進度表`;
+
+  c.innerHTML = `
+    ${isMonthEnd() ? '<div class="banner sat">📅 今天是本月最後一天，記得填寫每月累積！</div>' : ''}
+    <div class="panel">
+      <h2>🌕 每月累積 <span class="muted">${m}（每月最後一天填寫）</span></h2>
+
+      <h3 class="hd-earth">🪵 團隊行事曆</h3>
+      ${CONFIG.GOOGLE_CALENDAR_EMBED
+        ? `<iframe class="gcal" src="${esc(CONFIG.GOOGLE_CALENDAR_EMBED)}"></iframe>`
+        : `<div class="gcal-placeholder">📅 尚未設定團隊行事曆。<br>到 Google 日曆 → 設定 → 整合日曆 → 複製「嵌入代碼」的 src 網址，<br>貼到 index.html 最上方 CONFIG.GOOGLE_CALENDAR_EMBED 即可顯示。</div>`}
+
+      <h3 class="hd-red">🔥 ${qLabel} <span class="muted">以 UFMS 後台 CSIE 報表數字填寫・上月：BV ${pdM.bv ?? '—'}／IBV ${pdM.ibv ?? '—'}</span></h3>
+      <div class="trio" style="grid-template-columns:1fr 1fr;max-width:420px">
+        <div class="cell"><label>本月 BV</label><input type="number" min="0" id="mBV" value="${d.bv ?? ''}"></div>
+        <div class="cell"><label>本月 IBV</label><input type="number" min="0" id="mIBV" value="${d.ibv ?? ''}"></div>
+      </div>
+      <div class="proj" style="margin-top:10px">
+        <div class="row"><span id="qBVlabel"></span><span id="qBVpct"></span></div>
+        <div class="bar"><div id="qBVbar" style="background:linear-gradient(90deg,var(--pink),var(--orange))"></div></div>
+      </div>
+      <div class="proj">
+        <div class="row"><span id="qIBVlabel"></span><span id="qIBVpct"></span></div>
+        <div class="bar"><div id="qIBVbar" style="background:linear-gradient(90deg,var(--violet),#4fc3f7)"></div></div>
+      </div>
+      <div id="csieBadge"></div>
+
+      <h3 class="hd-blue">💧 簽約新店長</h3>
+      <div id="mNew"></div>
+
+      <div id="mufoBadge"></div>
+
+      <h3 class="hd-blue">💧 本季簽約新店長再推薦新店長</h3>
+      <div id="mRef"></div>
+
+      <h3 class="hd-gray">༄ 月度復盤</h3>
+      <div class="field"><label>討論時間</label><input type="datetime-local" id="mTime" value="${esc(d.discuss_time || '')}" style="max-width:260px"></div>
+      <div class="field"><label>一起復盤的資深夥伴名字</label><input id="mSenior" value="${esc(d.senior || '')}" placeholder="資深夥伴"></div>
+      <div class="field"><label>想調整修正的地方</label><textarea class="diary" id="mAdjust" style="min-height:80px">${esc(d.adjust || '')}</textarea></div>
+      <div class="field"><label>給自己鼓勵的話語 💛</label><textarea class="diary" id="mCheer" style="min-height:60px">${esc(d.cheer || '')}</textarea></div>
+
+      <div class="savebar">
+        <span class="savedmark">${rec ? '✓ 本月已填寫（可再修改）' : ''}</span>
+        <button class="btn gold" id="mSave">💾 儲存月復盤</button>
+      </div>
+    </div>`;
+
+  simpleList($('#mNew'), newMgrs, { max: 20, ph: '簽約新店長姓名', onChange: () => bars() });
+  simpleList($('#mRef'), refMgrs, { max: 20, ph: '再推薦新店長姓名', onChange: () => bars() });
+
+  const setBar = (id, val, goal) => {
+    const pct = Math.round(val / goal * 100);          // 不設上限，可超過 100%
+    $('#' + id + 'label').textContent = `${id.includes('IBV') ? 'IBV' : 'BV'} ${fmt(val)} / ${goal}`;
+    $('#' + id + 'pct').textContent = pct + '%';
+    $('#' + id + 'bar').style.width = Math.min(100, val / goal * 100) + '%';
+    return pct;
+  };
+  const bars = () => {
+    const bv = +$('#mBV').value || 0, ibv = +$('#mIBV').value || 0;
+    const bvPct = setBar('qBV', bv, QUARTER_BV_GOAL);   // 依最新月份填寫數字顯示（不累加）
+    const ibvPct = setBar('qIBV', ibv, QUARTER_IBV_GOAL);
+    const both100 = bvPct >= 100 && ibvPct >= 100;
+    $('#csieBadge').innerHTML = both100
+      ? `<div class="goalbadge csie">🎉 提前達標 CSIE　<span class="gb-sub">BV ${bvPct}%・IBV ${ibvPct}%</span></div>` : '';
+    const nm = newMgrs.filter(s => s.trim()).length, rf = refMgrs.filter(s => s.trim()).length;
+    const mufo = both100 && (nm >= 2 || (nm >= 1 && rf >= 1));
+    $('#mufoBadge').innerHTML = mufo ? `<div class="goalbadge mufo">🏆 提前達標 MUFO</div>` : '';
+  };
+  $('#mBV').oninput = bars; $('#mIBV').oninput = bars; bars();
+
+  $('#mSave').onclick = async () => {
+    const data = {
+      new_managers: newMgrs.map(s => s.trim()).filter(Boolean),
+      referrals: refMgrs.map(s => s.trim()).filter(Boolean),
+      bv: +$('#mBV').value || 0, ibv: +$('#mIBV').value || 0,
+      discuss_time: $('#mTime').value,
+      senior: $('#mSenior').value, adjust: $('#mAdjust').value, cheer: $('#mCheer').value,
+    };
+    await api.saveRecord('monthly', m, { data });
+    toast('🌕 每月累積已儲存！');
+    showTab('monthly');
+  };
+}
+
+/* =========================================================
+   每日行動反思與心情日記 — 一週日誌部落格
+   ========================================================= */
+let diaryWeek = weekKey();   // 目前檢視的週（該週的週六）
+function renderDiaryBlog(host, dailies) {
+  const byDate = {};
+  dailies.forEach(r => { byDate[r.period] = r.data || r; });
+  const wdName = d => '日一二三四五六'[d.getDay()];
+  function paint() {
+    const start = new Date(diaryWeek + 'T00:00:00');
+    const days = [...Array(7)].map((_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+    host.innerHTML = `
+      <div class="panel">
+        <h2>📔 每日行動反思與心情日記 <span class="muted">一週日誌・連續閱讀每一天</span></h2>
+        <div class="diarynav">
+          <button class="btn small ghost" data-shift="-1">← 上一週</button>
+          <span class="dwk">${weekRangeLabel(diaryWeek)}</span>
+          <button class="btn small ghost" data-shift="1" ${diaryWeek >= weekKey() ? 'disabled' : ''}>下一週 →</button>
+        </div>
+        ${days.map(d => {
+          const ds = fmtD(d), rec = byDate[ds], future = ds > todayStr();
+          return `<div class="dblog${rec ? '' : ' empty'}">
+            <div class="dblog-date">${d.getMonth() + 1}/${d.getDate()}<span class="dow">週${wdName(d)}</span></div>
+            <div class="dblog-body">
+              ${rec
+                ? `${rec.diary ? `<div class="dblog-text">${esc(rec.diary)}</div>` : '<div class="muted">（當天有打卡，但未寫日記）</div>'}
+                   ${rec.card ? `<div class="dblog-meta">🃏 NOVA 第 ${rec.card} 號・${esc(NOVA_CARDS[rec.card - 1]?.t || '')}</div>` : ''}`
+                : future ? '<div class="muted">—</div>' : '<div class="muted">當天沒有打卡</div>'}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    host.querySelectorAll('[data-shift]').forEach(b => b.onclick = () => { diaryWeek = shiftWeekKey(diaryWeek, +b.dataset.shift); paint(); });
+  }
+  paint();
+}
+
+/* =========================================================
+   我的紀錄 — 歷史提交列表，點開看完整內容
+   ========================================================= */
+let historyType = 'daily';
+async function renderHistory(c) {
+  const recs = await api.listMine(historyType);
+  const label = { daily: '每日打卡', weekly: '每週盤點', monthly: '每月累積' };
+
+  // 摘星軌跡：每日打卡依「週六～週五」分組計合格黃星星；紫星取自該週每週盤點的達成旗標
+  const allDaily = await api.listMine('daily');
+  const allWeekly = await api.listMine('weekly');
+  const superByWeek = {};
+  allWeekly.forEach(r => { const dd = r.data || r; if (dd.super_star) superByWeek[r.period] = true; });
+  const byWeek = {};
+  allDaily.forEach(r => { if (dayQualifies(r)) { const wk = weekOfDay(r.period); byWeek[wk] = (byWeek[wk] || 0) + 1; } });
+  const weeks = Object.keys(byWeek).sort().reverse();
+  const totalYellow = Object.values(byWeek).reduce((a, b) => a + b, 0);
+  const totalSuper = Object.keys(superByWeek).length;
+  const trailHTML = `
+    <div class="panel">
+      <h2>🌠 摘星軌跡 <span class="muted">合格打卡一天得 1 顆黃星星，整週達成盤點條件得 1 顆紫色超星</span></h2>
+      <div class="starmeta">🌟 累積黃星星 <b>${totalYellow}</b> 顆　✦ 紫色超星星 <b>${totalSuper}</b> 顆</div>
+      ${weeks.length === 0 ? '<p class="muted" style="margin-top:10px">還沒有打卡星星，快去每日打卡吧！</p>' : ''}
+      ${weeks.map(wk => {
+        const cnt = byWeek[wk], gl = weekStarGoal(wk), sup = !!superByWeek[wk];
+        return `<div class="traktrow">
+          <span class="wk">${weekRangeLabel(wk)}${wk === LAUNCH_WEEK ? ' 🚀' : ''}</span>
+          <span class="starrow">${starSlots(cnt, gl, sup)}</span>
+          <span class="muted" style="margin-left:auto">${cnt}/${gl} 天${sup ? '・紫星達成 ✦' : ''}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  const summary = rec => {
+    const d = rec.data || rec;
+    if (historyType === 'daily') {
+      const rel = d.rel ?? (d.rel_items || []).length, inv = d.inv ?? (d.inv_items || []).length, list = d.list ?? (d.list_items || []).filter(Boolean).length;
+      const bar = rel >= 10 && inv >= 3 && list >= 2 ? '<span class="pillstat high">高標</span>'
+        : rel >= 3 && inv >= 0 && list >= 2 ? '<span class="pillstat low">低標</span>' : '<span class="pillstat none">未達標</span>';
+      return `${bar} <span class="muted">BV ${fmt(d.bv_total ?? sumBV(d.bv_items))}｜IBV ${fmt(d.ibv_total ?? sumIBV(d.ibv_items))}${d.card ? '｜🃏 ' + d.card : ''}</span>`;
+    }
+    if (historyType === 'weekly') {
+      const n = (d.top10 || []).filter(x => x.name).length;
+      return `<span class="muted">TOP10 ${n}/10｜BV ${d.bv ?? 0}｜IBV ${d.ibv ?? 0}${d.achieved === 'yes' ? '｜✅ 上週達成' : d.achieved === 'no' ? '｜❌ 上週未達成' : ''}</span>`;
+    }
+    return `<span class="muted">BV ${fmt(d.bv ?? d.bv_sum ?? 0)}｜IBV ${fmt(d.ibv ?? d.ibv_sum ?? 0)}${d.senior ? '｜與 ' + esc(d.senior) + ' 復盤' : ''}</span>`;
+  };
+
+  c.innerHTML = trailHTML + `
+    <div class="panel">
+      <h2>📋 填寫紀錄 <span class="muted">點一筆展開完整內容</span></h2>
+      <div class="auth-tabs" style="max-width:400px">
+        ${['daily', 'weekly', 'monthly'].map(t => `<button data-ht="${t}" class="${historyType === t ? 'active' : ''}">${label[t]}</button>`).join('')}
+      </div>
+      ${recs.length === 0 ? `<p class="muted" style="margin-top:14px">還沒有${label[historyType]}紀錄。</p>` : ''}
+      <div id="hList">
+        ${recs.map((r, i) => `
+          <div class="hrow" data-h="${i}">
+            <span class="hperiod">${historyType === 'weekly' ? weekRangeLabel(r.period) : esc(r.period)}</span>
+            <span class="hsum">${summary(r)}</span>
+            <span class="arrow">▾</span>
+          </div>
+          <div class="hdetail hidden" data-hd="${i}"></div>`).join('')}
+      </div>
+    </div>
+    <div id="diaryBlog"></div>`;
+
+  renderDiaryBlog($('#diaryBlog'), allDaily);
+
+  c.querySelectorAll('[data-ht]').forEach(b => b.onclick = () => { historyType = b.dataset.ht; renderHistory(c); });
+  c.querySelectorAll('.hrow').forEach(row => row.onclick = () => {
+    const i = +row.dataset.h;
+    const det = c.querySelector(`[data-hd="${i}"]`);
+    const open = det.classList.toggle('hidden');
+    row.querySelector('.arrow').textContent = open ? '▾' : '▴';
+    if (!det.dataset.filled) {
+      const d = recs[i].data || recs[i];
+      det.innerHTML = historyType === 'daily' ? detailDaily(d) : historyType === 'weekly' ? detailWeekly(d) : detailMonthly(d);
+      det.dataset.filled = '1';
+    }
+  });
+}
+const kv = (label, val) => val ? `<div class="kv"><span>${label}</span><div>${val}</div></div>` : '';
+const miniTable = (heads, rows) => rows.length ? `
+  <table class="data" style="min-width:0">
+    <thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${r.map(x => `<td>${x}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table>` : '';
+
+function detailDaily(d) {
+  const list = arr => (arr || []).filter(Boolean).map(esc).join('、');
+  return `
+    ${kv('建立關係', list(d.rel_items) || (d.rel ? d.rel + ' 個' : ''))}
+    ${kv('邀約碰面', list(d.inv_items) || (d.inv ? d.inv + ' 個' : ''))}
+    ${kv('增加名單', list(d.list_items) || (d.list ? d.list + ' 個' : ''))}
+    ${kv('零售 BV', miniTable(['品項', 'BV', '顧客類型', '顧客'],
+      (d.bv_items || []).map(it => [esc(it.name), esc(it.bv), esc(it.cust_type || ''), esc(it.customer || '')])))}
+    ${kv('零售 IBV', miniTable(['品項', '商店', 'IBV%', '金額', 'IBV點數'],
+      (d.ibv_items || []).map(it => [esc(it.name), esc(it.store || ''), esc(it.pct), esc(it.amount), fmt(ibvPoints(it))])))}
+    ${kv('BV / IBV 總額', `BV ${fmt(d.bv_total ?? sumBV(d.bv_items))}｜IBV ${fmt(d.ibv_total ?? sumIBV(d.ibv_items))}`)}
+    ${kv('專注正向滋養', list(d.focus))}
+    ${kv('學習重點筆記＆心得', esc(d.learn))}
+    ${kv('心情日記', esc(d.diary))}
+    ${kv('NOVA 牌卡', d.card ? `第 ${d.card} 號・${esc(NOVA_CARDS[d.card - 1]?.t || '')}｜${esc(NOVA_CARDS[d.card - 1]?.m || '')}` : '')}`;
+}
+function detailWeekly(d) {
+  return `
+    ${kv('打卡星星', d.star_days != null ? `完成 ${d.star_days} 天${d.super_star ? '　✦ 獲得紫色超星星' : ''}` : '')}
+    ${kv('TOP 10 名單', miniTable(['#', '名單', '跟進策略'],
+      (d.top10 || []).map((r, i) => [i + 1, esc(r.name), esc(r.strategy)])))}
+    ${kv('上週兩訪', miniTable(['人名', '類型', '其他'],
+      (d.visits || []).map(v => [esc(v.name), esc(v.type), esc(v.other || '')])))}
+    ${kv('參與培訓', (d.trainings || []).join('、'))}
+    ${kv('本週累加 BV / IBV', `BV ${d.bv ?? 0}｜IBV ${d.ibv ?? 0}`)}
+    ${kv('上週目標達成', d.achieved === 'yes' ? '✅ 有達成' : d.achieved === 'no' ? '❌ 未達成' : '')}
+    ${kv('重新檢視週目標', esc(d.review))}
+    ${kv('下一週目標節奏', esc(d.custom))}`;
+}
+function detailMonthly(d) {
+  const names = arr => (arr || []).filter(Boolean).map(esc).join('、');
+  return `
+    ${kv('當月累計', `BV ${fmt(d.bv ?? d.bv_sum ?? 0)} / ${MONTH_BV_GOAL}｜IBV ${fmt(d.ibv ?? d.ibv_sum ?? 0)} / ${MONTH_IBV_GOAL}`)}
+    ${kv('新合作店長', names(d.new_managers))}
+    ${kv('再推薦店長', names(d.referrals))}
+    ${kv('討論時間', d.discuss_time ? esc(d.discuss_time).replace('T', ' ') : '')}
+    ${kv('資深夥伴', esc(d.senior))}
+    ${kv('想調整修正', esc(d.adjust))}
+    ${kv('鼓勵的話語', esc(d.cheer))}`;
+}
+
+/* =========================================================
+   統計報表（最高管理員）
+   ========================================================= */
+const monthsInQuarter = ym => { const y = ym.slice(0, 4), m = +ym.slice(5, 7), qs = Math.floor((m - 1) / 3) * 3 + 1; return [0, 1, 2].map(i => `${y}-${pad(qs + i)}`); };
+function statPreds(win) {
+  const today = todayStr(), mon = monthStr(), qms = monthsInQuarter(mon);
+  // 一週歸屬的月份以「週五（該週最後一天）」為準，跨月的週算在結束的那個月
+  const weekMonth = sat => { const f = new Date(sat + 'T00:00:00'); f.setDate(f.getDate() + 6); return `${f.getFullYear()}-${pad(f.getMonth() + 1)}`; };
+  return {
+    daily: p => win === 'day' ? p === today : win === 'week' ? weekOfDay(p) === weekKey() : win === 'month' ? p.slice(0, 7) === mon : qms.includes(p.slice(0, 7)),
+    weekSat: sat => (win === 'day' || win === 'week') ? sat === currentReviewKey() : win === 'month' ? weekMonth(sat) === mon : qms.includes(weekMonth(sat)),
+    month: ym => win === 'quarter' ? qms.includes(ym) : ym === mon,
+  };
+}
+function computeStats(data, win) {
+  const pr = statPreds(win);
+  const dv = r => r.data || r;
+  const num = (r, k) => +(dv(r)[k] || 0);
+  const alen = (r, k) => (dv(r)[k] || []).filter(Boolean).length;
+  const yellowOf = uid => data.daily.filter(r => r.user_id === uid && dayQualifies(r) && pr.daily(r.period)).length;
+  const purpleOf = uid => data.weekly.filter(r => r.user_id === uid && dv(r).super_star && pr.weekSat(r.period)).length;
+  const monthWin = win === 'month' || win === 'quarter';
+  const bvOf = uid => monthWin
+    ? data.monthly.filter(r => r.user_id === uid && pr.month(r.period)).reduce((a, r) => a + num(r, 'bv'), 0)
+    : data.weekly.filter(r => r.user_id === uid && pr.weekSat(r.period)).reduce((a, r) => a + num(r, 'bv'), 0);
+  const ibvOf = uid => monthWin
+    ? data.monthly.filter(r => r.user_id === uid && pr.month(r.period)).reduce((a, r) => a + num(r, 'ibv'), 0)
+    : data.weekly.filter(r => r.user_id === uid && pr.weekSat(r.period)).reduce((a, r) => a + num(r, 'ibv'), 0);
+  const mgrOf = uid => data.monthly.filter(r => r.user_id === uid && pr.month(r.period)).reduce((a, r) => a + alen(r, 'new_managers'), 0);
+  const refOf = uid => data.monthly.filter(r => r.user_id === uid && pr.month(r.period)).reduce((a, r) => a + alen(r, 'referrals'), 0);
+  const teamMembers = tid => data.users.filter(u => u.team_id === tid);
+  const sumOver = (members, fn) => members.reduce((a, m) => a + fn(m.id), 0);
+
+  // 依數量分組（不同數量→有哪些人）
+  const distByCount = fn => {
+    const map = {};
+    data.users.forEach(u => { const n = fn(u.id); if (n > 0) (map[n] ||= []).push(u.name); });
+    return Object.keys(map).map(Number).sort((a, b) => b - a).map(n => ({ count: n, names: map[n] }));
+  };
+
+  return {
+    yellowDist: distByCount(yellowOf),
+    purpleDist: distByCount(purpleOf),
+    teamStars: data.teams.map(t => {
+      const members = teamMembers(t.id);
+      return { name: t.name,
+        yellow: sumOver(members, yellowOf), purple: sumOver(members, purpleOf),
+        orange: teamOrangeDays(data.daily, members, pr.daily).length,
+        rainbow: teamRainbowWeeks(data.weekly, members, pr.weekSat).length };
+    }).sort((a, b) => b.yellow - a.yellow || b.purple - a.purple),
+    memberRank: data.users.map(u => ({
+      name: u.name, team: data.teams.find(t => t.id === u.team_id)?.name || '—',
+      bv: bvOf(u.id), ibv: ibvOf(u.id), mgr: mgrOf(u.id), ref: refOf(u.id),
+    })).filter(x => x.bv || x.ibv || x.mgr || x.ref).sort((a, b) => b.bv - a.bv || b.ibv - a.ibv),
+    teamRank: data.teams.map(t => {
+      const members = teamMembers(t.id);
+      return { name: t.name, bv: sumOver(members, bvOf), ibv: sumOver(members, ibvOf), mgr: sumOver(members, mgrOf), ref: sumOver(members, refOf) };
+    }).filter(x => x.bv || x.ibv || x.mgr || x.ref).sort((a, b) => b.bv - a.bv || b.ibv - a.ibv),
+  };
+}
+const WIN_LABELS = { day: '今日', week: '本週', month: '本月', quarter: '本季' };
+function renderStats(host, data) {
+  let win = 'week';
+  const rankRows = (arr, cols) => arr.length ? `
+    <div class="datatable-wrap"><table class="data">
+      <thead><tr><th>#</th>${cols.map(c => `<th>${c.h}</th>`).join('')}</tr></thead>
+      <tbody>${arr.map((r, i) => `<tr><td>${i + 1}</td>${cols.map(c => `<td>${c.f(r)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>` : '<p class="muted">此期間尚無資料。</p>';
+  const distRows = (arr, emoji) => arr.length ? arr.map(d => `
+    <div class="distrow"><span class="distn">${emoji} ${d.count}</span><span class="distp">${d.names.map(esc).join('、')}</span></div>`).join('')
+    : '<p class="muted">此期間尚無資料。</p>';
+
+  function paint() {
+    const s = computeStats(data, win);
+    host.innerHTML = `
+      <div class="panel">
+        <h2>📈 統計報表 <span class="muted">最高管理員專用</span>
+          <span class="tag" style="margin-left:auto"></span></h2>
+        <div class="auth-tabs" style="max-width:360px">
+          ${Object.entries(WIN_LABELS).map(([k, v]) => `<button data-win="${k}" class="${win === k ? 'active' : ''}">${v}</button>`).join('')}
+        </div>
+
+        <h3>🌟 黃色星星分布 <span class="muted">不同數量各有哪些人</span></h3>
+        ${distRows(s.yellowDist, '🌟')}
+
+        <h3>✦ 紫色星星分布 <span class="muted">不同數量各有哪些人</span></h3>
+        ${distRows(s.purpleDist, '✦')}
+
+        <h3>🏅 各組別星星排行 <span class="muted">${WIN_LABELS[win]}・黃星星/紫星/守護星/北極星</span></h3>
+        ${rankRows(s.teamStars, [
+          { h: '組別', f: r => esc(r.name) },
+          { h: '🌟 黃星星', f: r => r.yellow },
+          { h: '✦ 紫星', f: r => r.purple },
+          { h: '🛡️ 守護星', f: r => r.orange },
+          { h: '✴️ 北極星', f: r => r.rainbow },
+        ])}
+
+        <h3>💰 成員 BV／IBV／簽約店長 排行 <span class="muted">${WIN_LABELS[win]}</span></h3>
+        ${rankRows(s.memberRank, [
+          { h: '成員', f: r => esc(r.name) },
+          { h: '組別', f: r => esc(r.team) },
+          { h: 'BV', f: r => fmt(r.bv) },
+          { h: 'IBV', f: r => fmt(r.ibv) },
+          { h: '簽約店長', f: r => r.mgr },
+          { h: '再推薦', f: r => r.ref },
+        ])}
+
+        <h3>🏢 組別 BV／IBV／簽約店長 排行 <span class="muted">${WIN_LABELS[win]}</span></h3>
+        ${rankRows(s.teamRank, [
+          { h: '組別', f: r => esc(r.name) },
+          { h: 'BV', f: r => fmt(r.bv) },
+          { h: 'IBV', f: r => fmt(r.ibv) },
+          { h: '簽約店長', f: r => r.mgr },
+          { h: '再推薦', f: r => r.ref },
+        ])}
+        <p class="muted" style="margin-top:12px">註：BV/IBV 於「今日／本週」取每週盤點數字，「本月／本季」取每月復盤數字；簽約店長與再推薦為每月復盤資料（今日／本週以本月計）。</p>
+      </div>`;
+    host.querySelectorAll('[data-win]').forEach(b => b.onclick = () => { win = b.dataset.win; paint(); });
+  }
+  paint();
+}
+
+/* =========================================================
+   組長面板 — 只看達成率，看不到數字與內容
+   ========================================================= */
+async function renderLeader(c) {
+  const { team, rows, orangeDays = [], rainbowWeeks = [] } = await api.teamCompletion();
+  if (!team) {
+    c.innerHTML = `
+      <div class="panel">
+        <h2>🛡️ 守護者面板 — 我的組別</h2>
+        <p class="muted" style="margin-bottom:14px">你還沒有組別，先建立一個吧！（此為守護者帶的組別，與管理者的業務組別各自獨立）成員由最高管理員分配進組。</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <input id="gName" placeholder="組別名稱，例：北極星小組" style="flex:1;min-width:200px">
+          <button class="btn" id="gCreate">🚀 創立組別</button>
+        </div>
+      </div>`;
+    $('#gCreate').onclick = async () => {
+      const name = $('#gName').value.trim();
+      if (!name) return toast('請輸入組別名稱');
+      await api.createTeam(name);
+      toast('組別建立成功！');
+      showTab('leader');
+    };
+    return;
+  }
+  const mark = ok => ok ? '<span class="pillstat ok">✓ 已填</span>' : '<span class="pillstat no">未填</span>';
+  c.innerHTML = `
+    <div class="panel">
+      <h2>🛡️ 守護者面板 — ${esc(team.name)} <span class="muted">我的組別・達成狀況、星星與每日/每週詳細資料</span></h2>
+      <div class="teambonus">
+        <div class="bstar orange"><span class="ic">🛡️</span><div><b>${orangeDays.length}</b> 顆守護星<div class="muted">全員當日都得黃星星的天數</div></div></div>
+        <div class="bstar rainbow"><span class="ic">✴️</span><div><b>${rainbowWeeks.length}</b> 顆北極星<div class="muted">全員該週都得紫星的週數</div></div></div>
+      </div>
+      ${rows.length === 0 ? '<p class="muted">目前組內沒有成員，請最高管理員將成員分配進你的組別。</p>' : ''}
+      ${rows.map((r, i) => `
+        <div class="mrow">
+          <div class="avatar" style="background:${AVATAR_COLORS[i % AVATAR_COLORS.length]}">${esc(r.name[0] || '?')}</div>
+          <div>
+            <div class="nm">${esc(r.name)} <span class="muted">${ROLE_EMOJI[r.role] || ''}</span></div>
+            <div class="sub">近 7 日打卡率 ${r.rate7}%　🌟 黃星星 ${r.yellowTotal}　✦ 紫星 ${r.superTotal}</div>
+          </div>
+          <div class="right">
+            <span class="sub">今日</span>${mark(r.daily)}
+            <span class="sub">本週</span>${mark(r.weekly)}
+            <span class="sub">本月</span>${mark(r.monthly)}
+            <button class="btn small ghost" data-wk="${i}">📅 每週紀錄</button>
+            <button class="btn small ghost" data-mrec="${r.id}" data-i="${i}">📄 詳細資料</button>
+            <button class="btn small ghost" data-nudge="${r.id}" data-name="${esc(r.name)}">🔔 提醒</button>
+          </div>
+        </div>
+        <div class="hdetail hidden" data-wkd="${i}">
+          ${r.weeks.length === 0 ? '<span class="muted">這位組員還沒有打卡星星。</span>' :
+            r.weeks.map(wk => `<div class="traktrow">
+              <span class="wk">${weekRangeLabel(wk.wk)}</span>
+              <span class="starrow">${starSlots(wk.yellow, wk.goal, wk.super)}</span>
+              <span class="muted" style="margin-left:auto">${wk.yellow}/${wk.goal} 天${wk.super ? '・紫星 ✦' : ''}</span>
+            </div>`).join('')}
+        </div>
+        <div class="hdetail hidden" data-mrecd="${i}"></div>`).join('')}
+    </div>`;
+  c.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => {
+    const det = c.querySelector(`[data-wkd="${b.dataset.wk}"]`);
+    det.classList.toggle('hidden');
+  });
+  // 成員每日/每週詳細資料（守護者可見完整填寫內容）
+  c.querySelectorAll('[data-mrec]').forEach(b => b.onclick = async () => {
+    const det = c.querySelector(`[data-mrecd="${b.dataset.i}"]`);
+    if (det.dataset.filled) { det.classList.toggle('hidden'); return; }
+    const recs = await api.teamMemberRecords(b.dataset.mrec);
+    const dv = r => r.data || r;
+    const fold = (label, inner) => `<details class="recfold"><summary>${label}</summary><div class="recbody">${inner}</div></details>`;
+    det.innerHTML = `
+      <div class="rechead">📝 每日打卡（${recs.daily.length} 筆）</div>
+      ${recs.daily.length ? recs.daily.map(r => fold(r.period, detailDaily(dv(r)))).join('') : '<span class="muted">尚無每日打卡。</span>'}
+      <div class="rechead" style="margin-top:12px">🎯 每週盤點（${recs.weekly.length} 筆）</div>
+      ${recs.weekly.length ? recs.weekly.map(r => fold(weekRangeLabel(r.period), detailWeekly(dv(r)))).join('') : '<span class="muted">尚無每週盤點。</span>'}`;
+    det.dataset.filled = '1';
+    det.classList.remove('hidden');
+  });
+  c.querySelectorAll('[data-nudge]').forEach(b => b.onclick = async () => {
+    const msg = prompt(`要對 ${b.dataset.name} 說什麼？`, '記得完成今天的打卡喔！⭐');
+    if (msg === null) return;
+    await api.sendNudge(b.dataset.nudge, msg || '記得打卡喔！');
+    toast(`已提醒 ${b.dataset.name} 🔔`);
+  });
+}
+
+/* =========================================================
+   管理面板 — 分組 + 只有當組管理員能看資料/匯出
+   ========================================================= */
+async function renderAdmin(c) {
+  const isSuper = !!currentUser.is_super;
+  const [users, groups, teams] = await Promise.all([api.listUsers(), api.listGroups(), api.listTeams()]);
+  const uname = id => users.find(u => u.id === id)?.name || '（未指派）';
+  const admins = users.filter(u => u.role !== 'member' || u.is_super); // 可被指派為業務組別管理員（組長也可兼任）
+  const myGroups = groups.filter(g => isSuper || g.admin_id === currentUser.id);
+
+  let html = '';
+  if (isSuper) {
+    // 最高管理員：成員角色 + 兩種分組（守護者組別 / 業務組別，各自獨立）
+    html += `
+      <div class="panel">
+        <h2>👑 最高管理員 — 成員角色與分組</h2>
+        <p class="muted" style="margin-bottom:10px">「組別」＝守護者帶的組（守護者面板用）；「業務組別」＝業務管理用，兩者各自獨立。</p>
+        ${users.map((u, i) => `
+          <div class="mrow">
+            <div class="avatar" style="background:${AVATAR_COLORS[i % AVATAR_COLORS.length]}">${esc(u.name[0] || '?')}</div>
+            <div><div class="nm">${esc(u.name)}${u.is_super ? ' 👑' : ''}</div><div class="sub">${esc(u.email || '')}</div></div>
+            <div class="right">
+              <select data-role-for="${u.id}">
+                ${Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${ROLE_EMOJI[k]} ${v}</option>`).join('')}
+              </select>
+              <select data-team-for="${u.id}" title="守護者組別">
+                <option value="">🌙（未入組別）</option>
+                ${teams.map(t => `<option value="${t.id}" ${u.team_id === t.id ? 'selected' : ''}>🌙 ${esc(t.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="grpchips" data-grpuser="${u.id}">
+            <span class="grplabel">🏢 業務組別（可多選）</span>
+            ${groups.length === 0 ? '<span class="muted">尚無業務組別</span>' :
+              groups.map(g => `<label class="gchip"><input type="checkbox" value="${g.id}" ${(u.group_ids || []).includes(g.id) ? 'checked' : ''}>${esc(g.name)}</label>`).join('')}
+          </div>`).join('')}
+      </div>
+
+      <div class="panel">
+        <h2>🌙 守護者組別管理 <span class="muted">新增守護者組別並指派守護者</span></h2>
+        <div class="add-form">
+          <input id="tName" placeholder="新守護者組別名稱，例：北極星小組" maxlength="30">
+          <select id="tLeader">
+            <option value="">指派守護者（選填）</option>
+            ${users.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+          </select>
+          <button class="btn" id="tCreate">＋ 新增守護者組別</button>
+        </div>
+        ${teams.length === 0 ? '<p class="muted" style="margin-top:10px">還沒有守護者組別。</p>' : ''}
+        ${teams.map(t => `
+          <div class="mrow">
+            <div class="avatar" style="background:var(--yellow);color:#5a3d00">🌙</div>
+            <div><div class="nm">${esc(t.name)}</div><div class="sub">守護者：${esc(uname(t.leader_id))}　成員 ${users.filter(u => u.team_id === t.id).length} 人</div></div>
+          </div>`).join('')}
+      </div>
+
+      <div class="panel">
+        <h2>🏢 業務組別管理 <span class="muted">建立業務組別、指派業務組別管理員（僅最高管理員）</span></h2>
+        <div class="add-form">
+          <input id="bgName" placeholder="新業務組別名稱，例：北區業務組" maxlength="30">
+          <button class="btn" id="bgCreate">＋ 新增業務組別</button>
+        </div>
+        ${groups.length === 0 ? '<p class="muted" style="margin-top:10px">還沒有業務組別。</p>' : ''}
+        ${groups.map(g => `
+          <div class="mrow">
+            <div class="avatar" style="background:var(--violet)">🏢</div>
+            <div><div class="nm">${esc(g.name)}</div><div class="sub">成員 ${users.filter(u => (u.group_ids || []).includes(g.id)).length} 人</div></div>
+            <div class="right">
+              <span class="sub">業務組別管理員</span>
+              <select data-gadmin="${g.id}">
+                <option value="">（未指派）</option>
+                ${admins.map(a => `<option value="${a.id}" ${g.admin_id === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  // 業務組別管理員（含最高管理員）：檢視組員每日／每週／每月狀況與資料
+  html += `
+    <div class="panel">
+      <h2>📊 業務組別 — 組員狀況與資料 <span class="muted">${isSuper ? '最高管理員可檢視所有組別' : '僅顯示你被指派管理的業務組別'}</span></h2>
+      ${myGroups.length === 0 ? '<p class="muted">目前沒有可檢視的業務組別。</p>' : ''}
+      ${myGroups.map(g => `
+        <div class="mrow">
+          <div class="avatar" style="background:var(--teal)">📁</div>
+          <div><div class="nm">${esc(g.name)}</div><div class="sub">管理員：${esc(uname(g.admin_id))}</div></div>
+          <div class="right">
+            <button class="btn small" data-status="${g.id}">📅 組員狀況</button>
+            <button class="btn small" data-view="${g.id}">📄 檢視資料</button>
+            <button class="btn small gold" data-csv="${g.id}">⬇️ 匯出EXCEL</button>
+          </div>
+        </div>
+        <div class="hdetail hidden" data-statusd="${g.id}"></div>`).join('')}
+      <div id="dataView"></div>
+    </div>`;
+
+  if (isSuper) html += '<div id="statsPanel"></div>';
+
+  c.innerHTML = html;
+
+  if (isSuper) {
+    try { renderStats($('#statsPanel'), await api.allRecords()); }
+    catch (e) { $('#statsPanel').innerHTML = `<div class="panel"><span class="err">${esc(e.message)}</span></div>`; }
+  }
+
+  c.querySelectorAll('[data-role-for]').forEach(s => s.onchange = async () => {
+    await api.assignUser(s.dataset.roleFor, { role: s.value }); toast('角色已更新'); showTab('admin');
+  });
+  c.querySelectorAll('[data-team-for]').forEach(s => s.onchange = async () => {
+    await api.assignUser(s.dataset.teamFor, { team_id: s.value || null }); toast('守護者組別已更新');
+  });
+  c.querySelectorAll('[data-grpuser]').forEach(box => box.onchange = async () => {
+    const ids = [...box.querySelectorAll('input:checked')].map(i => i.value);
+    await api.setUserGroups(box.dataset.grpuser, ids); toast('業務組別已更新');
+  });
+  c.querySelectorAll('[data-gadmin]').forEach(s => s.onchange = async () => {
+    await api.setGroupAdmin(s.dataset.gadmin, s.value); toast('業務組別管理員已更新'); showTab('admin');
+  });
+  const bgBtn = $('#bgCreate');
+  if (bgBtn) bgBtn.onclick = async () => {
+    const name = $('#bgName').value.trim();
+    if (!name) return toast('請輸入業務組別名稱');
+    await api.createGroupAsAdmin(name); toast('業務組別已建立'); showTab('admin');
+  };
+  const tBtn = $('#tCreate');
+  if (tBtn) tBtn.onclick = async () => {
+    const name = $('#tName').value.trim();
+    if (!name) return toast('請輸入守護者組別名稱');
+    await api.createTeamAsAdmin(name, $('#tLeader').value || null); toast('守護者組別已建立'); showTab('admin');
+  };
+
+  // 組員狀況（每日/每週/每月 + 星星），只顯示達成狀態
+  const markS = ok => ok ? '<span class="pillstat ok">✓ 已填</span>' : '<span class="pillstat no">未填</span>';
+  c.querySelectorAll('[data-status]').forEach(b => b.onclick = async () => {
+    const det = c.querySelector(`[data-statusd="${b.dataset.status}"]`);
+    if (det.dataset.filled) { det.classList.toggle('hidden'); return; }
+    const { rows } = await api.groupStatus(b.dataset.status);
+    det.innerHTML = rows.length === 0 ? '<span class="muted">此組尚無成員。</span>' : rows.map(r => `
+      <div class="mrow" style="background:#fff">
+        <div><div class="nm">${esc(r.name)} <span class="muted">${ROLE_EMOJI[r.role] || ''}</span></div>
+          <div class="sub">🌟 黃星星 ${r.yellowTotal}　✦ 紫星 ${r.superTotal}</div></div>
+        <div class="right">
+          <span class="sub">今日</span>${markS(r.daily)}
+          <span class="sub">本週</span>${markS(r.weekly)}
+          <span class="sub">本月</span>${markS(r.monthly)}
+        </div>
+      </div>
+      ${r.weeks.map(wk => `<div class="traktrow" style="margin-left:14px">
+        <span class="wk">${weekRangeLabel(wk.wk)}</span>
+        <span class="starrow">${starSlots(wk.yellow, wk.goal, wk.super)}</span>
+        <span class="muted" style="margin-left:auto">${wk.yellow}/${wk.goal} 天${wk.super ? '・紫星 ✦' : ''}</span>
+      </div>`).join('')}`).join('');
+    det.dataset.filled = '1';
+    det.classList.remove('hidden');
+  });
+
+  const flatten = rec => { const d = rec.data || rec; return { ...rec, ...d }; };
+  const DATA_HEADERS = ['類型', '成員', '期間', '執行', 'BV', 'IBV', '完整內容'];
+  const jn = a => (a || []).filter(Boolean).join('、');
+  const detailDailyText = r => [
+    `建立關係：${jn(r.rel_items) || (r.rel ?? 0)}`,
+    `邀約碰面：${jn(r.inv_items) || (r.inv ?? 0)}`,
+    `增加名單：${jn(r.list_items) || (r.list ?? 0)}`,
+    (r.bv_items || []).length ? `零售BV：${(r.bv_items || []).map(it => `${it.name || ''}${it.bv ? '(' + it.bv + 'BV)' : ''}${it.cust_type ? '/' + it.cust_type : ''}${it.customer ? '/' + it.customer : ''}`).join('；')}` : '',
+    (r.ibv_items || []).length ? `零售IBV：${(r.ibv_items || []).map(it => `${it.name || ''}${it.store ? '@' + it.store : ''}${it.pct ? '/' + it.pct + '%' : ''}${it.amount ? '/$' + it.amount : ''}(${fmt(ibvPoints(it))}pts)`).join('；')}` : '',
+    (r.focus || []).length ? `專注正向滋養：${jn(r.focus)}` : '',
+    r.learn ? `學習重點筆記＆心得：${r.learn}` : '',
+    r.card ? `NOVA牌卡：${r.card}號 ${NOVA_CARDS[r.card - 1]?.t || ''}` : '',
+    r.diary ? `日記：${r.diary}` : '',
+  ].filter(Boolean).join('｜');
+  const detailWeeklyText = r => [
+    (r.top10 || []).filter(x => x.name).length ? `TOP10：${(r.top10 || []).filter(x => x.name).map(x => `${x.name}${x.strategy ? '(' + x.strategy + ')' : ''}`).join('、')}` : '',
+    (r.visits || []).filter(v => v.name).length ? `上週兩訪：${(r.visits || []).filter(v => v.name).map(v => `${v.name}${v.type ? '/' + v.type : ''}${v.other ? '/' + v.other : ''}`).join('、')}` : '',
+    (r.trainings || []).length ? `培訓：${jn(r.trainings)}` : '',
+    r.achieved ? `上週目標：${r.achieved === 'yes' ? '達成' : '未達成'}` : '',
+    r.review ? `重新檢視：${r.review}` : '',
+    r.custom ? `下週節奏：${r.custom}` : '',
+    r.star_days != null ? `打卡星星：${r.star_days}天${r.super_star ? '（紫星）' : ''}` : '',
+  ].filter(Boolean).join('｜');
+  const detailMonthlyText = r => [
+    (r.new_managers || []).filter(Boolean).length ? `簽約新店長：${jn(r.new_managers)}` : '',
+    (r.referrals || []).filter(Boolean).length ? `再推薦新店長：${jn(r.referrals)}` : '',
+    r.discuss_time ? `討論時間：${String(r.discuss_time).replace('T', ' ')}` : '',
+    r.senior ? `資深夥伴：${r.senior}` : '',
+    r.adjust ? `想調整：${r.adjust}` : '',
+    r.cheer ? `鼓勵：${r.cheer}` : '',
+  ].filter(Boolean).join('｜');
+  const buildDataRows = recs => {
+    const rows = [];
+    recs.daily.map(flatten).forEach(r => rows.push(['每日', r.name, r.period, `關係${r.rel ?? 0}/邀約碰面${r.inv ?? 0}/名單${r.list ?? 0}`, fmt(r.bv_total ?? sumBV(r.bv_items)), fmt(r.ibv_total ?? sumIBV(r.ibv_items)), detailDailyText(r)]));
+    recs.weekly.map(flatten).forEach(r => rows.push(['每週', r.name, r.period, `TOP10 ${(r.top10 || []).filter(x => x.name).length}/10`, r.bv ?? 0, r.ibv ?? 0, detailWeeklyText(r)]));
+    recs.monthly.map(flatten).forEach(r => rows.push(['每月', r.name, r.period, `店長 ${(r.new_managers || []).filter(Boolean).length} 位`, fmt(r.bv ?? r.bv_sum ?? 0), fmt(r.ibv ?? r.ibv_sum ?? 0), detailMonthlyText(r)]));
+    return rows;
+  };
+  c.querySelectorAll('[data-view]').forEach(b => b.onclick = async () => {
+    const rows = buildDataRows(await api.groupRecords(b.dataset.view));
+    $('#dataView').innerHTML = `
+      <h3 style="margin-top:18px">📄 組別資料（${rows.length} 筆）</h3>
+      <div class="datatable-wrap"><table class="data">
+        <thead><tr>${DATA_HEADERS.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => `<tr>${r.map(cell => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${DATA_HEADERS.length}" class="muted">尚無資料</td></tr>`}</tbody>
+      </table></div>`;
+  });
+  c.querySelectorAll('[data-csv]').forEach(b => b.onclick = async () => {
+    const rows = buildDataRows(await api.groupRecords(b.dataset.csv));
+    exportExcel(DATA_HEADERS, rows, `摘星計畫-組別資料-${todayStr()}.xls`);
+    toast('Excel 已下載 ⬇️');
+  });
+}
+
+// 匯出 Excel（.xls）：只輸出值，用 Excel 可直接開啟的 HTML 表格格式
+function exportExcel(headers, rows, filename) {
+  const cell = c => esc(c == null ? '' : String(c));
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">`
+    + `<head><meta charset="utf-8"></head><body><table border="1"><thead><tr>`
+    + headers.map(h => `<th>${cell(h)}</th>`).join('') + `</tr></thead><tbody>`
+    + rows.map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join('')}</tr>`).join('')
+    + `</tbody></table></body></html>`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + html], { type: 'application/vnd.ms-excel' }));
+  a.download = filename; a.click();
+}
+
+/* =========================================================
+   啟動
+   ========================================================= */
+(async function boot() {
+  if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    api = makeSupabaseApi(createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY));
+  } else {
+    api = demoApi;
+    $('#demoNote').style.display = '';
+  }
+  await api.init();
+  currentUser = await api.me();
+  if (currentUser) await enterApp();
+})();
+</script>
+</body>
+</html>

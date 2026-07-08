@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "starcatcher",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-jameshong-Desktop-----/8b723e89-d3cf-43d2-a181-7b1e0113e7ca/scratchpad/serve.py"],
+      "port": 4173
+    }
+  ]
+}

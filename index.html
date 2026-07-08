@@ -1405,7 +1405,7 @@ async function renderWeekly(c) {
       <h3 class="hd-blue">💧 上週兩訪</h3>
       <div id="wVisits"></div>
 
-      <h3 class="hd-earth">🪵 參與培訓（複選）</h3>
+      <h3 class="hd-earth">🪵 規劃自己放在正向學習環境（複選）</h3>
       <div class="checks" id="wTrain">
         ${TRAININGS.map(o => `<label><input type="checkbox" value="${o}" ${(d.trainings || []).includes(o) ? 'checked' : ''}>${o}</label>`).join('')}
       </div>
@@ -1755,7 +1755,7 @@ function detailWeekly(d) {
       (d.top10 || []).map((r, i) => [i + 1, esc(r.name), esc(r.strategy)])))}
     ${kv('上週兩訪', miniTable(['人名', '類型', '其他'],
       (d.visits || []).map(v => [esc(v.name), esc(v.type), esc(v.other || '')])))}
-    ${kv('參與培訓', (d.trainings || []).join('、'))}
+    ${kv('正向學習環境', (d.trainings || []).join('、'))}
     ${kv('本週累加 BV / IBV', `BV ${d.bv ?? 0}｜IBV ${d.ibv ?? 0}`)}
     ${kv('上週目標達成', d.achieved === 'yes' ? '✅ 有達成' : d.achieved === 'no' ? '❌ 未達成' : '')}
     ${kv('重新檢視週目標', esc(d.review))}
@@ -2155,7 +2155,7 @@ async function renderAdmin(c) {
   const detailWeeklyText = r => [
     (r.top10 || []).filter(x => x.name).length ? `TOP10：${(r.top10 || []).filter(x => x.name).map(x => `${x.name}${x.strategy ? '(' + x.strategy + ')' : ''}`).join('、')}` : '',
     (r.visits || []).filter(v => v.name).length ? `上週兩訪：${(r.visits || []).filter(v => v.name).map(v => `${v.name}${v.type ? '/' + v.type : ''}${v.other ? '/' + v.other : ''}`).join('、')}` : '',
-    (r.trainings || []).length ? `培訓：${jn(r.trainings)}` : '',
+    (r.trainings || []).length ? `正向學習環境：${jn(r.trainings)}` : '',
     r.achieved ? `上週目標：${r.achieved === 'yes' ? '達成' : '未達成'}` : '',
     r.review ? `重新檢視：${r.review}` : '',
     r.custom ? `下週節奏：${r.custom}` : '',

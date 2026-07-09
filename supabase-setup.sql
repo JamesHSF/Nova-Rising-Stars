@@ -63,8 +63,15 @@ create table if not exists public.daily_records (
 );
 create table if not exists public.weekly_records (like public.daily_records including all);
 create table if not exists public.monthly_records (like public.daily_records including all);
-alter table public.weekly_records  add constraint weekly_user_fk  foreign key (user_id) references auth.users(id) on delete cascade;
-alter table public.monthly_records add constraint monthly_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
+-- 外鍵：僅在尚未存在時才加，讓整份 SQL 可重複執行
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'weekly_user_fk') then
+    alter table public.weekly_records add constraint weekly_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'monthly_user_fk') then
+    alter table public.monthly_records add constraint monthly_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
+  end if;
+end $$;
 
 create table if not exists public.nudges (
   id uuid primary key default gen_random_uuid(),

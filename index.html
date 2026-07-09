@@ -1445,10 +1445,10 @@ async function renderWeekly(c, period) {
         ${TRAININGS.map(o => `<label><input type="checkbox" value="${o}" ${(d.trainings || []).includes(o) ? 'checked' : ''}>${o}</label>`).join('')}
       </div>
 
-      <h3 class="hd-red">🔥 本週累加 BV / IBV <span class="muted">以 UFMS 後台 CSIE 報表數字填寫・上週：BV ${pd.bv ?? '—'}／IBV ${pd.ibv ?? '—'}</span></h3>
+      <h3 class="hd-red">🔥 本週累加 BV / IBV <span class="muted">上週：BV ${pd.bv ?? '—'}／IBV ${pd.ibv ?? '—'}</span></h3>
       <div class="trio">
-        <div class="cell"><label>本週 BV</label><input type="number" min="0" id="wBV" value="${d.bv ?? ''}"><span class="goalhint" id="wBVhint"></span></div>
-        <div class="cell"><label>本週 IBV</label><input type="number" min="0" id="wIBV" value="${d.ibv ?? ''}"><span class="goalhint" id="wIBVhint"></span></div>
+        <div class="cell"><label>本週 BV <span class="muted" style="font-weight:600">（以UFMS後台的MUFO報表顯示BV點數填入）</span></label><input type="number" min="0" id="wBV" value="${d.bv ?? ''}"><span class="goalhint" id="wBVhint"></span></div>
+        <div class="cell"><label>本週 IBV <span class="muted" style="font-weight:600">（以UFMS後台的CSIE報表顯示IBV點數填入）</span></label><input type="number" min="0" id="wIBV" value="${d.ibv ?? ''}"><span class="goalhint" id="wIBVhint"></span></div>
       </div>
 
       <h3 class="hd-gray">༄ 上週目標是否達成？</h3>
@@ -1575,7 +1575,7 @@ async function renderMonthly(c, period) {
         ? `<iframe class="gcal" src="${esc(CONFIG.GOOGLE_CALENDAR_EMBED)}"></iframe>`
         : `<div class="gcal-placeholder">📅 尚未設定團隊行事曆。<br>到 Google 日曆 → 設定 → 整合日曆 → 複製「嵌入代碼」的 src 網址，<br>貼到 index.html 最上方 CONFIG.GOOGLE_CALENDAR_EMBED 即可顯示。</div>`}
 
-      <h3 class="hd-red">🔥 ${qLabel} <span class="muted">以 UFMS 後台 CSIE 報表數字填寫・上月：BV ${pdM.bv ?? '—'}／IBV ${pdM.ibv ?? '—'}</span></h3>
+      <h3 class="hd-red">🔥 ${qLabel} <span class="muted">以 UFMS 後台 MUFO報表填入BV點數／CSIE報表填入IBV點數・上月：BV ${pdM.bv ?? '—'}／IBV ${pdM.ibv ?? '—'}</span></h3>
       <div class="trio" style="grid-template-columns:1fr 1fr;max-width:420px">
         <div class="cell"><label>本月 BV</label><input type="number" min="0" id="mBV" value="${d.bv ?? ''}"></div>
         <div class="cell"><label>本月 IBV</label><input type="number" min="0" id="mIBV" value="${d.ibv ?? ''}"></div>

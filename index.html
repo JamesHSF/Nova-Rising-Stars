@@ -116,6 +116,9 @@ const CONFIG = {
   .banner { border-radius: 16px; padding: 12px 18px; font-weight: 800; font-size: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .banner.sat { background: #fff3d6; color: #8a6d00; border: 2px solid #ffcf3f; }
   .banner.nudge { background: #ffe4ee; color: #c2266b; border: 2px solid #ff9dc0; }
+  .banner.edit { background: #e6f2ff; color: #1f5fa8; border: 2px solid #86b9ec; }
+  .hrow .hedit, .dblog .dbedit { flex-shrink: 0; }
+  .dblog { align-items: flex-start; }
   .banner .btn { margin-left: auto; }
 
   /* status pills */
@@ -1031,20 +1034,51 @@ async function enterApp() {
   showTab('daily');
 }
 
-async function showTab(tab) {
+async function showTab(tab, period) {
   currentTab = tab;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   const c = $('#content');
   c.innerHTML = '<div class="panel"><span class="muted">載入中…</span></div>';
   try {
-    if (tab === 'daily') await renderDaily(c);
-    if (tab === 'weekly') await renderWeekly(c);
-    if (tab === 'monthly') await renderMonthly(c);
+    if (tab === 'daily') await renderDaily(c, period);
+    if (tab === 'weekly') await renderWeekly(c, period);
+    if (tab === 'monthly') await renderMonthly(c, period);
     if (tab === 'history') await renderHistory(c);
     if (tab === 'leader') await renderLeader(c);
     if (tab === 'admin') await renderAdmin(c);
   } catch (e) {
     c.innerHTML = `<div class="panel"><span class="err">${esc(e.message)}</span></div>`;
+  }
+}
+/* 編輯過去期間時的提示橫幅 */
+const editBanner = (label, isEdit) => isEdit
+  ? `<div class="banner edit">✏️ 你正在補寫／修改 <b>${label}</b> 的紀錄，儲存後會覆蓋原本送出的資料。
+      <button class="btn small ghost" id="backToTrail">← 回摘星軌跡</button></div>` : '';
+function wireBackToTrail() { const b = $('#backToTrail'); if (b) b.onclick = () => showTab('history'); }
+
+/* 紫色超星星條件（共用：填寫時即時判定、改動後補算） */
+function superStarMet({ dayCount, goal, bv, prevBv, visits, top10 }) {
+  const c2 = prevBv != null ? bv > prevBv : bv > 0;
+  return dayCount >= goal && c2 && visits >= 2 && top10 >= 10;
+}
+/* 每日打卡改動後，重算該週的紫色超星星並回寫（黃星/守護星/北極星為即時推算，無需回寫） */
+async function resyncSuperStar(wk) {
+  const wRec = await api.getRecord('weekly', wk);
+  if (!wRec) return;                              // 該週尚未盤點，紫星待盤點時判定
+  const wd = wRec.data || wRec;
+  const pRec = await api.getRecord('weekly', shiftWeekKey(wk, -1));
+  const pd = pRec ? (pRec.data || pRec) : {};
+  const dailies = await api.listMine('daily');
+  const dayCount = dailies.filter(r => weekOfDay(r.period) === wk && dayQualifies(r)).length;
+  const met = superStarMet({
+    dayCount, goal: weekStarGoal(wk),
+    bv: +wd.bv || 0, prevBv: pd.bv != null ? +pd.bv : null,
+    visits: (wd.visits || []).filter(v => (v.name || '').trim()).length,
+    top10: (wd.top10 || []).filter(x => (x.name || '').trim()).length,
+  });
+  if (!!wd.super_star !== met || wd.star_days !== dayCount) {
+    await api.saveRecord('weekly', wk, { data: { ...wd, star_days: dayCount, super_star: met } });
+    if (met && !wd.super_star) toast('✦ 補給紫色超星星！');
   }
 }
 
@@ -1103,13 +1137,15 @@ function dynTable(host, cols, rows, onChange) {
 /* =========================================================
    每日打卡
    ========================================================= */
-async function renderDaily(c) {
-  const t = todayStr();
+async function renderDaily(c, period) {
+  const t = period || todayStr();
+  const isEdit = t !== todayStr();
   const rec = await api.getRecord('daily', t);
   const d = rec?.data || rec || {};
-  const nudges = await api.myNudges();
+  const nudges = isEdit ? [] : await api.myNudges();
 
   c.innerHTML = `
+    ${editBanner(t, isEdit)}
     ${nudges.length ? `<div class="banner nudge">🔔 ${nudges.map(n => `<b>${esc(n.from_name)}</b> 提醒你：${esc(n.message)}（${n.date}）`).join('　')}
       <button class="btn small ghost" id="clearNudge">知道了</button></div>` : ''}
     <div class="panel">
@@ -1230,9 +1266,11 @@ async function renderDaily(c) {
       diary: $('#dDiary').value, card,
     };
     await api.saveRecord('daily', t, { data });
-    toast('🌟 打卡成功！');
-    showTab('daily');
+    await resyncSuperStar(weekOfDay(t));   // 改動後補算該週紫色超星星
+    toast(isEdit ? '✅ 已更新並覆蓋原紀錄！' : '🌟 打卡成功！');
+    showTab(isEdit ? 'history' : 'daily');
   };
+  wireBackToTrail();
 }
 function novaMotifSVG(el) {
   return `<svg viewBox="0 0 100 100" width="120" height="120" aria-hidden="true">
@@ -1373,8 +1411,9 @@ async function shareCardImage(n) {
 /* =========================================================
    每週目標
    ========================================================= */
-async function renderWeekly(c) {
-  const w = currentReviewKey();               // 要盤點的週（已結束的週六～週五）
+async function renderWeekly(c, period) {
+  const w = period || currentReviewKey();     // 要盤點的週（已結束的週六～週五）
+  const isEdit = w !== currentReviewKey();
   const pw = shiftWeekKey(w, -1);             // 再上一週（比較基準）
   const rec = await api.getRecord('weekly', w);
   const prev = await api.getRecord('weekly', pw);
@@ -1390,9 +1429,10 @@ async function renderWeekly(c) {
   let gotSuper = false;
 
   c.innerHTML = `
-    ${isSaturday() ? '<div class="banner sat">📅 今天是週六，記得完成上一週（週六～週五）的每週盤點！</div>' : ''}
+    ${editBanner(weekRangeLabel(w), isEdit)}
+    ${!isEdit && isSaturday() ? '<div class="banner sat">📅 今天是週六，記得完成上一週（週六～週五）的每週盤點！</div>' : ''}
     <div class="panel">
-      <h2>🎯 每週盤點 <span class="muted">盤點區間 ${weekRangeLabel(w)}（上一個週六～週五）</span></h2>
+      <h2>🎯 每週盤點 <span class="muted">盤點區間 ${weekRangeLabel(w)}（週六～週五）</span></h2>
 
       <h3>✦ 打卡星星 <span class="muted">合格的一天得 1 顆黃星星（業務至少低標＋專注正向滋養≥1＋心情日記），集滿 ${goal} 顆並符合下列條件換 1 顆紫色超星${w === LAUNCH_WEEK ? '（上線首週 5 顆即達標）' : ''}</span></h3>
       <div class="starrow" id="wStarRow">${starSlots(dayCount, goal, false)}</div>
@@ -1470,7 +1510,7 @@ async function renderWeekly(c) {
     const c2 = pd.bv != null ? bv > +pd.bv : bv > 0;
     const c3 = filledVisits() >= 2;
     const c4 = filledTop10() >= 10;
-    gotSuper = c1 && c2 && c3 && c4;
+    gotSuper = superStarMet({ dayCount, goal, bv, prevBv: pd.bv != null ? +pd.bv : null, visits: filledVisits(), top10: filledTop10() });
     $('#wStarRow').innerHTML = starSlots(dayCount, goal, gotSuper);
     const item = (ok, t) => `<div class="chk ${ok ? 'ok' : ''}">${ok ? '✅' : '⬜'} ${t}</div>`;
     $('#superChecklist').innerHTML =
@@ -1500,20 +1540,25 @@ async function renderWeekly(c) {
       custom: $('#wGoal').value,
       star_days: dayCount, super_star: gotSuper,
     };
+    const hadSuper = !!d.super_star;
     await api.saveRecord('weekly', w, { data });
-    toast('🎯 每週盤點已儲存！');
-    showTab('weekly');
+    toast(gotSuper && !hadSuper ? '✦ 補給紫色超星星！' : isEdit ? '✅ 已更新並覆蓋原紀錄！' : '🎯 每週盤點已儲存！');
+    showTab(isEdit ? 'history' : 'weekly');
   };
+  wireBackToTrail();
 }
 
 /* =========================================================
    每月復盤
    ========================================================= */
-async function renderMonthly(c) {
-  const m = monthStr();
+async function renderMonthly(c, period) {
+  const m = period || monthStr();
+  const isEdit = m !== monthStr();
   const rec = await api.getRecord('monthly', m);
   const d = rec?.data || rec || {};
-  const pm = prevMonthStr();
+  // 上一個月（相對於正在編輯的月份）
+  const pmD = new Date(+m.slice(0, 4), +m.slice(5, 7) - 2, 1);
+  const pm = `${pmD.getFullYear()}-${pad(pmD.getMonth() + 1)}`;
   const prevRec = await api.getRecord('monthly', pm);
   const pdM = prevRec?.data || prevRec || {};
   const newMgrs = d.new_managers?.length ? [...d.new_managers] : [''];
@@ -1525,7 +1570,8 @@ async function renderMonthly(c) {
   const qLabel = `${qStart}月-${qStart + 2}月份進度表`;
 
   c.innerHTML = `
-    ${isMonthEnd() ? '<div class="banner sat">📅 今天是本月最後一天，記得填寫每月累積！</div>' : ''}
+    ${editBanner(m, isEdit)}
+    ${!isEdit && isMonthEnd() ? '<div class="banner sat">📅 今天是本月最後一天，記得填寫每月累積！</div>' : ''}
     <div class="panel">
       <h2>🌕 每月累積 <span class="muted">${m}（每月最後一天填寫）</span></h2>
 
@@ -1601,9 +1647,10 @@ async function renderMonthly(c) {
       senior: $('#mSenior').value, adjust: $('#mAdjust').value, cheer: $('#mCheer').value,
     };
     await api.saveRecord('monthly', m, { data });
-    toast('🌕 每月累積已儲存！');
-    showTab('monthly');
+    toast(isEdit ? '✅ 已更新並覆蓋原紀錄！' : '🌕 每月累積已儲存！');
+    showTab(isEdit ? 'history' : 'monthly');
   };
+  wireBackToTrail();
 }
 
 /* =========================================================
@@ -1619,7 +1666,7 @@ function renderDiaryBlog(host, dailies) {
     const days = [...Array(7)].map((_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
     host.innerHTML = `
       <div class="panel">
-        <h2>📔 每日行動反思與心情日記 <span class="muted">一週日誌・連續閱讀每一天</span></h2>
+        <h2>📔 每日行動反思與心情日記 <span class="muted">一週日誌・可補寫或修改任一天</span></h2>
         <div class="diarynav">
           <button class="btn small ghost" data-shift="-1">← 上一週</button>
           <span class="dwk">${weekRangeLabel(diaryWeek)}</span>
@@ -1635,10 +1682,12 @@ function renderDiaryBlog(host, dailies) {
                    ${rec.card ? `<div class="dblog-meta">🃏 NOVA 第 ${rec.card} 號・${esc(NOVA_CARDS[rec.card - 1]?.t || '')}</div>` : ''}`
                 : future ? '<div class="muted">—</div>' : '<div class="muted">當天沒有打卡</div>'}
             </div>
+            ${future ? '' : `<button class="btn small ghost dbedit" data-day="${ds}">${rec ? '✏️ 修改' : '＋ 補寫'}</button>`}
           </div>`;
         }).join('')}
       </div>`;
     host.querySelectorAll('[data-shift]').forEach(b => b.onclick = () => { diaryWeek = shiftWeekKey(diaryWeek, +b.dataset.shift); paint(); });
+    host.querySelectorAll('[data-day]').forEach(b => b.onclick = () => showTab('daily', b.dataset.day));
   }
   paint();
 }
@@ -1693,7 +1742,7 @@ async function renderHistory(c) {
 
   c.innerHTML = trailHTML + `
     <div class="panel">
-      <h2>📋 填寫紀錄 <span class="muted">點一筆展開完整內容</span></h2>
+      <h2>📋 填寫紀錄 <span class="muted">點一筆展開完整內容・可修改並覆蓋原紀錄</span></h2>
       <div class="auth-tabs" style="max-width:400px">
         ${['daily', 'weekly', 'monthly'].map(t => `<button data-ht="${t}" class="${historyType === t ? 'active' : ''}">${label[t]}</button>`).join('')}
       </div>
@@ -1703,6 +1752,7 @@ async function renderHistory(c) {
           <div class="hrow" data-h="${i}">
             <span class="hperiod">${historyType === 'weekly' ? weekRangeLabel(r.period) : esc(r.period)}</span>
             <span class="hsum">${summary(r)}</span>
+            <button class="btn small ghost hedit" data-edit="${esc(r.period)}">✏️ 修改</button>
             <span class="arrow">▾</span>
           </div>
           <div class="hdetail hidden" data-hd="${i}"></div>`).join('')}
@@ -1713,6 +1763,10 @@ async function renderHistory(c) {
   renderDiaryBlog($('#diaryBlog'), allDaily);
 
   c.querySelectorAll('[data-ht]').forEach(b => b.onclick = () => { historyType = b.dataset.ht; renderHistory(c); });
+  c.querySelectorAll('[data-edit]').forEach(b => b.onclick = e => {
+    e.stopPropagation();                       // 不要觸發展開
+    showTab(historyType, b.dataset.edit);
+  });
   c.querySelectorAll('.hrow').forEach(row => row.onclick = () => {
     const i = +row.dataset.h;
     const det = c.querySelector(`[data-hd="${i}"]`);

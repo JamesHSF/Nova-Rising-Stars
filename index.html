@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>摘星計畫 ✦ 團隊打卡系統</title>
+<!-- 加到主畫面 App 圖示與 PWA 設定 -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#372a75">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="摘星計畫">
 <style>
   :root {
     --bg1: #372a75; --bg2: #6d3bb8; --bg3: #b84ba0;
@@ -344,7 +353,7 @@
 const CONFIG = {
   SUPABASE_URL: 'https://xpjyimhlvalhqplulsfw.supabase.co',            // 例如 'https://xxxx.supabase.co'
   SUPABASE_ANON_KEY: 'sb_publishable_DkwL7cN2x2v9So3rCVa6Zg_W5NwWDQR',       // Project Settings → API → anon/publishable key
-  GOOGLE_CALENDAR_EMBED: 'https://calendar.google.com/calendar/embed?src=a28cd94b3617824a894a6bbbbc049cbe16c5f786dce9f16f590dfe94e27968d5%40group.calendar.google.com&ctz=Asia%2FTaipei',   // Google 行事曆「嵌入代碼」中的 src 網址（選填）
+  GOOGLE_CALENDAR_EMBED: '<iframe src="https://calendar.google.com/calendar/embed?src=a28cd94b3617824a894a6bbbbc049cbe16c5f786dce9f16f590dfe94e27968d5%40group.calendar.google.com&ctz=Asia%2FTaipei" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>',   // Google 行事曆「嵌入代碼」中的 src 網址（選填）
 };
 
 /* ---------- 常數 ---------- */

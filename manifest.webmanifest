@@ -1,0 +1,16 @@
+{
+  "name": "新心摘星計畫 Nova Rising Stars",
+  "short_name": "摘星計畫",
+  "description": "團隊打卡系統 — 建立個人的生意節奏，讓成功成為習慣。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#372a75",
+  "theme_color": "#372a75",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

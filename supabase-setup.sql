@@ -139,10 +139,11 @@ returns text language sql immutable as
 $$ select to_char(d - ((extract(dow from d)::int + 1) % 7), 'YYYY-MM-DD') $$;
 
 -- 這一天是否為「合格黃星」：業務至少低標 + 專注正向滋養≥1 + 心情日記有填
+-- 低標：建立關係≥3／邀約碰面≥0（不設下限，與前端 dayQualifies 一致）／名單≥2
 create or replace function public.day_qualifies(j jsonb)
 returns boolean language sql immutable as $$
   select coalesce((j->>'rel')::int, 0) >= 3
-     and coalesce((j->>'inv')::int, 0) >= 1
+     and coalesce((j->>'inv')::int, 0) >= 0
      and coalesce((j->>'list')::int, 0) >= 2
      and jsonb_array_length(coalesce(j->'focus', '[]'::jsonb)) >= 1
      and length(btrim(coalesce(j->>'diary', ''))) > 0

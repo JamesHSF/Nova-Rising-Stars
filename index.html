@@ -353,8 +353,14 @@
 const CONFIG = {
   SUPABASE_URL: 'https://xpjyimhlvalhqplulsfw.supabase.co',            // 例如 'https://xxxx.supabase.co'
   SUPABASE_ANON_KEY: 'sb_publishable_DkwL7cN2x2v9So3rCVa6Zg_W5NwWDQR',       // Project Settings → API → anon/publishable key
-  GOOGLE_CALENDAR_EMBED: '<iframe src="https://calendar.google.com/calendar/embed?src=a28cd94b3617824a894a6bbbbc049cbe16c5f786dce9f16f590dfe94e27968d5%40group.calendar.google.com&ctz=Asia%2FTaipei" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>',   // Google 行事曆「嵌入代碼」中的 src 網址（選填）
+  GOOGLE_CALENDAR_EMBED: '<iframe src="https://calendar.google.com/calendar/embed?src=a28cd94b3617824a894a6bbbbc049cbe16c5f786dce9f16f590dfe94e27968d5%40group.calendar.google.com&ctz=Asia%2FTaipei" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>',   // 直接貼 Google 日曆的整段 <iframe> 嵌入碼或只貼 src 網址皆可（選填）
 };
+// 相容：CONFIG.GOOGLE_CALENDAR_EMBED 可貼「整段 iframe 嵌入碼」或只貼 src 網址，統一取出真正的 src
+const CAL_EMBED_SRC = (() => {
+  const v = (CONFIG.GOOGLE_CALENDAR_EMBED || '').trim();
+  const m = v.match(/src=["']([^"']+)["']/i);   // 整段 iframe → 取 src="..." 內的網址
+  return m ? m[1] : v;                          // 否則視為純網址
+})();
 
 /* ---------- 常數 ---------- */
 const CARE_TYPES = ['面交','建立關係','產品體驗','PMT邀約','展示計劃','分享商機','其他'];
@@ -1183,8 +1189,10 @@ async function renderDaily(c, period) {
           <div class="muted" style="margin-top:8px">輕觸翻牌 🔮（36 張隨機・存檔後鎖定）</div>
         </div>
         <div id="cardSlot">${d.card ? drawnCardHTML(d.card, !!rec) : ''}</div>
-        <div class="novaphrase" style="text-align:center;margin-top:14px;line-height:0.5">Every small action brings you closer to your own star.</div>
-        <div class="novaphrase zh" style="text-align:center;line-height:0.5">每一個小行動，都讓你離自己的星星更近一步。</div>
+        <div style="text-align:center;margin-top:14px">
+          <div class="novaphrase" style="line-height:1.4">Every small action brings you closer to your own star.</div>
+          <div class="novaphrase zh" style="line-height:1.4">每一個小行動，都讓你離自己的星星更近一步。</div>
+        </div>
       </div>
 
       <h3 class="hd-gray">༄ 每日行動反思與心情日記 <span class="muted">最多 500 字</span></h3>
@@ -1580,8 +1588,8 @@ async function renderMonthly(c, period) {
       <h2>🌕 每月累積 <span class="muted">${m}（每月最後一天填寫）</span></h2>
 
       <h3 class="hd-earth">🪵 團隊行事曆</h3>
-      ${CONFIG.GOOGLE_CALENDAR_EMBED
-        ? `<iframe class="gcal" src="${esc(CONFIG.GOOGLE_CALENDAR_EMBED)}"></iframe>`
+      ${CAL_EMBED_SRC
+        ? `<iframe class="gcal" src="${esc(CAL_EMBED_SRC)}"></iframe>`
         : `<div class="gcal-placeholder">📅 尚未設定團隊行事曆。<br>到 Google 日曆 → 設定 → 整合日曆 → 複製「嵌入代碼」的 src 網址，<br>貼到 index.html 最上方 CONFIG.GOOGLE_CALENDAR_EMBED 即可顯示。</div>`}
 
       <h3 class="hd-red">🔥 ${qLabel} <span class="muted">以 UFMS 後台 MUFO報表填入BV點數／CSIE報表填入IBV點數・上月：BV ${pdM.bv ?? '—'}／IBV ${pdM.ibv ?? '—'}</span></h3>

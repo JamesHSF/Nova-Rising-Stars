@@ -568,14 +568,14 @@ const demoApi = (() => {
     async myCapabilities() {   // 一人可同時是組長與業務組別管理員
       const db = load(); const u = me();
       return {
-        leadsTeam: db.teams.some(t => t.leader_id === u.id),
+        leadsTeam: db.teams.some(t => t.leader_id === u.id || t.leader_id_2 === u.id),
         adminsGroup: db.groups.some(g => g.admin_id === u.id),
       };
     },
     // ===== 守護者組別（team）：守護者帶的分組，用 team_id =====
     async myTeam() {
       const db = load(); const u = me();
-      return db.teams.find(t => t.leader_id === u.id || t.id === u.team_id) || null;
+      return db.teams.find(t => t.leader_id === u.id || t.leader_id_2 === u.id || t.id === u.team_id) || null;
     },
     async createTeam(name) {           // 守護者建立自己的組別
       const db = load(); const u = me();
@@ -596,10 +596,28 @@ const demoApi = (() => {
       }
       save(db); return t;
     },
+    async setTeamLeaders(teamId, leaderIds) {   // 指派守護者組別的組長（最多兩位）
+      const db = load(); const u = me();
+      if (!u.is_super) throw new Error('只有最高管理員可以指派守護者');
+      const ids = [...new Set((leaderIds || []).filter(Boolean))].slice(0, 2);
+      const t = db.teams.find(t => t.id === teamId);
+      if (!t) throw new Error('找不到守護者組別');
+      t.leader_id = ids[0] || null;
+      t.leader_id_2 = ids[1] || null;
+      ids.forEach(id => { const lu = db.users.find(x => x.id === id); if (lu) { lu.team_id = teamId; if (lu.role === 'member') lu.role = 'leader'; } });
+      save(db);
+    },
+    async deleteTeam(teamId) {                   // 刪除守護者組別（成員移出、紀錄保留）
+      const db = load(); const u = me();
+      if (!u.is_super) throw new Error('只有最高管理員可以刪除守護者組別');
+      db.teams = db.teams.filter(t => t.id !== teamId);
+      db.users.forEach(x => { if (x.team_id === teamId) x.team_id = null; });
+      save(db);
+    },
     async listTeams() { return load().teams; },
     async teamCompletion() {           // 組長看自己組別成員的狀況＋星星
       const db = load(); const u = me();
-      const t = db.teams.find(t => t.leader_id === u.id || t.id === u.team_id);
+      const t = db.teams.find(t => t.leader_id === u.id || t.leader_id_2 === u.id || t.id === u.team_id);
       if (!t) return { team: null, rows: [] };
       const members = db.users.filter(x => x.team_id === t.id);
       const orangeDays = teamOrangeDays(db.daily, members);
@@ -608,7 +626,7 @@ const demoApi = (() => {
     },
     async teamMemberRecords(memberId) { // 守護者看組員的每日/每週詳細資料
       const db = load(); const u = me();
-      const t = db.teams.find(t => t.leader_id === u.id);
+      const t = db.teams.find(t => t.leader_id === u.id || t.leader_id_2 === u.id);
       if (!t) throw new Error('只有守護者可以檢視組員詳細資料');
       const mem = db.users.find(x => x.id === memberId && x.team_id === t.id);
       if (!mem) throw new Error('此成員不在你的組別');
@@ -629,6 +647,13 @@ const demoApi = (() => {
       if (!u.is_super) throw new Error('只有最高管理員可以新增業務組別');
       const g = { id: uid(db), name, admin_id: null };
       db.groups.push(g); save(db); return g;
+    },
+    async deleteGroup(groupId) {                 // 刪除業務組別（移除成員關係、紀錄保留）
+      const db = load(); const u = me();
+      if (!u.is_super) throw new Error('只有最高管理員可以刪除業務組別');
+      db.groups = db.groups.filter(g => g.id !== groupId);
+      db.users.forEach(x => { if (x.group_ids) x.group_ids = x.group_ids.filter(id => id !== groupId); });
+      save(db);
     },
     async groupStatus(groupId) {       // 業務組別管理員／最高管理員檢視某業務組別狀況＋星星
       const db = load(); const u = me();
@@ -804,14 +829,14 @@ function makeSupabaseApi(sb) {
     async myCapabilities() {
       const p = await profile();
       const [{ data: t }, { data: g }] = await Promise.all([
-        sb.from('teams').select('id').eq('leader_id', p.id).limit(1),
+        sb.from('teams').select('id').or(`leader_id.eq.${p.id},leader_id_2.eq.${p.id}`).limit(1),
         sb.from('groups').select('id').eq('admin_id', p.id).limit(1),
       ]);
       return { leadsTeam: !!(t && t.length), adminsGroup: !!(g && g.length) };
     },
     async myTeam() {
       const p = await profile();
-      const { data } = await sb.from('teams').select('*').or(`leader_id.eq.${p.id}${p.team_id ? ',id.eq.' + p.team_id : ''}`).limit(1);
+      const { data } = await sb.from('teams').select('*').or(`leader_id.eq.${p.id},leader_id_2.eq.${p.id}${p.team_id ? ',id.eq.' + p.team_id : ''}`).limit(1);
       return (data && data[0]) || null;
     },
     async createTeam(name) {
@@ -835,6 +860,18 @@ function makeSupabaseApi(sb) {
       }
       return data;
     },
+    async setTeamLeaders(teamId, leaderIds) {
+      const ids = [...new Set((leaderIds || []).filter(Boolean))].slice(0, 2);
+      const { error } = await sb.from('teams').update({ leader_id: ids[0] || null, leader_id_2: ids[1] || null }).eq('id', teamId);
+      throwIf(error);
+      for (const id of ids) {
+        const { data: lp } = await sb.from('profiles').select('role').eq('id', id).single();
+        const patch = { team_id: teamId };
+        if (lp?.role === 'member') patch.role = 'leader';
+        await sb.from('profiles').update(patch).eq('id', id);
+      }
+    },
+    async deleteTeam(teamId) { const { error } = await sb.from('teams').delete().eq('id', teamId); throwIf(error); },
     async listTeams() { const { data } = await sb.from('teams').select('*'); return data || []; },
     async createGroupAsAdmin(name) {
       const p = await profile();
@@ -843,6 +880,7 @@ function makeSupabaseApi(sb) {
       throwIf(error);
       return data;
     },
+    async deleteGroup(groupId) { const { error } = await sb.from('groups').delete().eq('id', groupId); throwIf(error); },
     async teamCompletion() {
       const { data, error } = await sb.rpc('team_completion');
       throwIf(error);
@@ -2099,7 +2137,20 @@ async function renderAdmin(c) {
         ${teams.map(t => `
           <div class="mrow">
             <div class="avatar" style="background:var(--yellow);color:#5a3d00">🌙</div>
-            <div><div class="nm">${esc(t.name)}</div><div class="sub">守護者：${esc(uname(t.leader_id))}　成員 ${users.filter(u => u.team_id === t.id).length} 人</div></div>
+            <div><div class="nm">${esc(t.name)}</div><div class="sub">成員 ${users.filter(u => u.team_id === t.id).length} 人</div></div>
+            <div class="right">
+              <span class="sub">組長1</span>
+              <select data-tleader1="${t.id}">
+                <option value="">（未指派）</option>
+                ${users.map(u => `<option value="${u.id}" ${t.leader_id === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+              </select>
+              <span class="sub">組長2</span>
+              <select data-tleader2="${t.id}">
+                <option value="">（未指派）</option>
+                ${users.map(u => `<option value="${u.id}" ${t.leader_id_2 === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+              </select>
+              <button class="btn small" data-del-team="${t.id}" data-name="${esc(t.name)}" style="background:#ffe1e1;color:#c23f3f">🗑️ 刪除</button>
+            </div>
           </div>`).join('')}
       </div>
 
@@ -2120,6 +2171,7 @@ async function renderAdmin(c) {
                 <option value="">（未指派）</option>
                 ${admins.map(a => `<option value="${a.id}" ${g.admin_id === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}
               </select>
+              <button class="btn small" data-del-group="${g.id}" data-name="${esc(g.name)}" style="background:#ffe1e1;color:#c23f3f">🗑️ 刪除</button>
             </div>
           </div>`).join('')}
       </div>`;
@@ -2165,6 +2217,22 @@ async function renderAdmin(c) {
   });
   c.querySelectorAll('[data-gadmin]').forEach(s => s.onchange = async () => {
     await api.setGroupAdmin(s.dataset.gadmin, s.value); toast('業務組別管理員已更新'); showTab('admin');
+  });
+  // 指派守護者組別的兩位組長（讀同一組的兩個下拉一起送出）
+  const applyLeaders = async teamId => {
+    const l1 = c.querySelector(`[data-tleader1="${teamId}"]`)?.value || '';
+    const l2 = c.querySelector(`[data-tleader2="${teamId}"]`)?.value || '';
+    await api.setTeamLeaders(teamId, [l1, l2]); toast('守護者已更新'); showTab('admin');
+  };
+  c.querySelectorAll('[data-tleader1]').forEach(s => s.onchange = () => applyLeaders(s.dataset.tleader1));
+  c.querySelectorAll('[data-tleader2]').forEach(s => s.onchange = () => applyLeaders(s.dataset.tleader2));
+  c.querySelectorAll('[data-del-team]').forEach(b => b.onclick = async () => {
+    if (!confirm(`確定刪除守護者組別「${b.dataset.name}」？組員會被移出此組別（不影響他們的打卡紀錄），此動作無法復原。`)) return;
+    await api.deleteTeam(b.dataset.delTeam); toast('守護者組別已刪除'); showTab('admin');
+  });
+  c.querySelectorAll('[data-del-group]').forEach(b => b.onclick = async () => {
+    if (!confirm(`確定刪除業務組別「${b.dataset.name}」？成員會被移出此組別（不影響他們的紀錄），此動作無法復原。`)) return;
+    await api.deleteGroup(b.dataset.delGroup); toast('業務組別已刪除'); showTab('admin');
   });
   const bgBtn = $('#bgCreate');
   if (bgBtn) bgBtn.onclick = async () => {

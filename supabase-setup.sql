@@ -9,8 +9,11 @@ create table if not exists public.teams (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   leader_id uuid references auth.users(id),
+  leader_id_2 uuid references auth.users(id),   -- 第二位守護者（組長），每組最多兩位
   created_at timestamptz default now()
 );
+-- 既有資料庫升級：補上第二位守護者欄位
+alter table public.teams add column if not exists leader_id_2 uuid references auth.users(id);
 
 -- 業務組別（group）：最高管理員建立、指派業務組別管理員
 create table if not exists public.groups (
@@ -63,8 +66,11 @@ create table if not exists public.daily_records (
 );
 create table if not exists public.weekly_records (like public.daily_records including all);
 create table if not exists public.monthly_records (like public.daily_records including all);
-alter table public.weekly_records  add constraint weekly_user_fk  foreign key (user_id) references auth.users(id) on delete cascade;
-alter table public.monthly_records add constraint monthly_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
+-- 外鍵改為可重複執行（先移除同名約束再加，避免重跑時報 already exists）
+alter table public.weekly_records  drop constraint if exists weekly_user_fk;
+alter table public.weekly_records  add  constraint weekly_user_fk  foreign key (user_id) references auth.users(id) on delete cascade;
+alter table public.monthly_records drop constraint if exists monthly_user_fk;
+alter table public.monthly_records add  constraint monthly_user_fk foreign key (user_id) references auth.users(id) on delete cascade;
 
 create table if not exists public.nudges (
   id uuid primary key default gen_random_uuid(),
@@ -121,7 +127,7 @@ returns boolean language sql security definer stable set search_path = public as
   select exists (
     select 1 from public.teams t
     join public.profiles p on p.team_id = t.id
-    where p.id = target_user and t.leader_id = auth.uid()
+    where p.id = target_user and (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid())
   )
 $$;
 
@@ -163,7 +169,7 @@ drop policy if exists p_profiles_select on public.profiles;
 create policy p_profiles_select on public.profiles for select using (
   id = auth.uid()
   or public.my_role() = 'admin'
-  or exists (select 1 from public.teams t where t.leader_id = auth.uid() and t.id = profiles.team_id)
+  or exists (select 1 from public.teams t where (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid()) and t.id = profiles.team_id)
 );
 drop policy if exists p_profiles_update_self on public.profiles;
 create policy p_profiles_update_self on public.profiles for update using (id = auth.uid());
@@ -180,7 +186,10 @@ create policy p_teams_insert on public.teams for insert with check (
   or public.am_super()   -- 最高管理員可建立守護者組別並指派任一守護者
 );
 drop policy if exists p_teams_update on public.teams;
-create policy p_teams_update on public.teams for update using (leader_id = auth.uid() or public.am_super());
+create policy p_teams_update on public.teams for update using (leader_id = auth.uid() or leader_id_2 = auth.uid() or public.am_super());
+-- 只有最高管理員可刪除守護者組別（成員的 team_id 因 on delete set null 會自動清空，紀錄不受影響）
+drop policy if exists p_teams_delete on public.teams;
+create policy p_teams_delete on public.teams for delete using (public.am_super());
 
 -- groups（業務組別）：所有登入者可讀；僅最高管理員可建立與更新（指派管理員）
 drop policy if exists p_groups_select on public.groups;
@@ -189,6 +198,9 @@ drop policy if exists p_groups_insert on public.groups;
 create policy p_groups_insert on public.groups for insert with check (public.am_super());
 drop policy if exists p_groups_update_admin on public.groups;
 create policy p_groups_update_admin on public.groups for update using (public.am_super());
+-- 只有最高管理員可刪除業務組別（group_members 因 on delete cascade 會自動清除，紀錄不受影響）
+drop policy if exists p_groups_delete on public.groups;
+create policy p_groups_delete on public.groups for delete using (public.am_super());
 
 -- 三張紀錄表：本人完全控制；「業務組別管理員」或最高管理員可讀該組成員資料
 do $$
@@ -214,7 +226,7 @@ drop policy if exists p_nudges_delete on public.nudges;
 create policy p_nudges_delete on public.nudges for delete using (to_id = auth.uid());
 drop policy if exists p_nudges_insert on public.nudges;
 create policy p_nudges_insert on public.nudges for insert with check (
-  exists (select 1 from public.teams t where t.id = public.team_of(to_id) and t.leader_id = auth.uid())
+  exists (select 1 from public.teams t where t.id = public.team_of(to_id) and (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid()))
   or public.is_admin_of_user(to_id)
 );
 
@@ -237,7 +249,7 @@ declare
   thismonth text := to_char(now(), 'YYYY-MM');
 begin
   select t.id into tid from public.teams t
-  where t.leader_id = auth.uid()
+  where (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid())
      or t.id = (select team_id from public.profiles where profiles.id = auth.uid());
   if tid is null then return; end if;
 
@@ -261,7 +273,7 @@ language plpgsql security definer set search_path = public as $$
 declare tid uuid;
 begin
   select t.id into tid from public.teams t
-  where t.leader_id = auth.uid()
+  where (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid())
      or t.id = (select team_id from public.profiles where profiles.id = auth.uid())
   limit 1;
   if tid is null then return; end if;
@@ -300,7 +312,7 @@ language plpgsql security definer set search_path = public as $$
 declare tid uuid; n int;
 begin
   select t.id into tid from public.teams t
-  where t.leader_id = auth.uid()
+  where (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid())
      or t.id = (select team_id from public.profiles where profiles.id = auth.uid())
   limit 1;
   if tid is null then return; end if;

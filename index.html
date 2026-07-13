@@ -477,7 +477,10 @@ function teamRainbowWeeks(weekly, members, pred = () => true) {
   return Object.keys(map).filter(w => map[w].size === members.length).sort().reverse();
 }
 const ibvPoints = it => (Number(it.amount) || 0) / 32 * (Number(it.pct) || 0) / 100;
-const sumBV = items => (items || []).reduce((s, it) => s + (Number(it.bv) || 0), 0);
+// 獨家代理商品：每筆點數依 pt_type 歸為 BV 或 IBV（舊資料無 pt_type 一律視為 BV）
+const sumBV = items => (items || []).filter(it => (it.pt_type || 'BV') === 'BV').reduce((s, it) => s + (Number(it.bv) || 0), 0);
+const sumIBVofExclusive = items => (items || []).filter(it => it.pt_type === 'IBV').reduce((s, it) => s + (Number(it.bv) || 0), 0);
+// 夥伴商店商品：IBV點數 = 銷售總金額 ÷ 32 × 商店IBV%
 const sumIBV = items => (items || []).reduce((s, it) => s + ibvPoints(it), 0);
 const fmt = n => (Math.round(n * 100) / 100).toLocaleString();
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1205,11 +1208,11 @@ async function renderDaily(c, period) {
         <div class="cell"><label>增加名單 <span class="countpill" id="listCount"></span></label><div id="dListList"></div><span class="goalhint">低標 2｜高標 2</span></div>
       </div>
 
-      <h3 class="hd-red">🔥 零售品項紀錄 — BV</h3>
+      <h3 class="hd-red">🔥 獨家代理商品銷售紀錄 <span class="muted">每筆可選 BV 或 IBV，分別累加到對應的今日總額</span></h3>
       <div id="bvTable"></div>
       <div class="totalline">今日 BV 總額：<span id="bvTotal">0</span></div>
 
-      <h3 class="hd-red">🔥 零售品項紀錄 — IBV <span class="muted">IBV點數 = 銷售總金額 ÷ 32 × 商店IBV%</span></h3>
+      <h3 class="hd-red">🔥 夥伴商店商品銷售紀錄 <span class="muted">IBV點數 = 銷售總金額 ÷ 32 × 商店IBV%</span></h3>
       <div id="ibvTable"></div>
       <div class="totalline">今日 IBV 總額：<span id="ibvTotal">0</span></div>
 
@@ -1245,7 +1248,7 @@ async function renderDaily(c, period) {
 
   if (nudges.length) $('#clearNudge').onclick = async () => { await api.clearNudges(); showTab('daily'); };
 
-  const bvRows = d.bv_items?.length ? structuredClone(d.bv_items) : [{}];
+  const bvRows = d.bv_items?.length ? structuredClone(d.bv_items).map(r => ({ pt_type: 'BV', ...r })) : [{ pt_type: 'BV' }];
   const ibvRows = d.ibv_items?.length ? structuredClone(d.ibv_items) : [{}];
   const relItems = d.rel_items?.length ? [...d.rel_items] : [''];
   const invItems = d.inv_items?.length ? [...d.inv_items] : [''];
@@ -1256,7 +1259,7 @@ async function renderDaily(c, period) {
   const filled = arr => arr.filter(s => String(s).trim()).length;
   const refresh = () => {
     $('#bvTotal').textContent = fmt(sumBV(bvRows));
-    $('#ibvTotal').textContent = fmt(sumIBV(ibvRows));
+    $('#ibvTotal').textContent = fmt(sumIBVofExclusive(bvRows) + sumIBV(ibvRows));
     $('#dCount').textContent = $('#dDiary').value.length;
     const rel = filled(relItems), inv = filled(invItems), list = filled(listItems);
     $('#relCount').textContent = `${rel}/10`;
@@ -1272,7 +1275,8 @@ async function renderDaily(c, period) {
   simpleList($('#dListList'), listItems, { max: 2, fixed: true, ph: '新名單人名', onChange: refresh });
   dynTable($('#bvTable'), [
     { key: 'name', label: '銷售產品品項', ph: '例：魚油', w: 130 },
-    { key: 'bv', label: '銷售BV點數', type: 'number', w: 100 },
+    { key: 'pt_type', label: '點數類型', type: 'select', options: ['BV', 'IBV'], w: 90 },
+    { key: 'bv', label: '銷售點數', type: 'number', w: 90 },
     { key: 'cust_type', label: '顧客類型', type: 'select', options: CUSTOMER_TYPES, w: 150 },
     { key: 'customer', label: '顧客', ph: '顧客姓名', w: 110 },
   ], bvRows, refresh);
@@ -1310,7 +1314,7 @@ async function renderDaily(c, period) {
       rel: filled(relItems), inv: filled(invItems), list: filled(listItems),
       bv_items: bvRows.filter(r => r.name || r.bv),
       ibv_items: ibvRows.filter(r => r.name || r.amount),
-      bv_total: sumBV(bvRows), ibv_total: sumIBV(ibvRows),
+      bv_total: sumBV(bvRows), ibv_total: sumIBVofExclusive(bvRows) + sumIBV(ibvRows),
       focus: [...document.querySelectorAll('#dFocus input:checked')].map(i => i.value),
       learn: $('#dLearn').value,
       diary: $('#dDiary').value, card,
@@ -1842,9 +1846,9 @@ function detailDaily(d) {
     ${kv('建立關係', list(d.rel_items) || (d.rel ? d.rel + ' 個' : ''))}
     ${kv('邀約碰面', list(d.inv_items) || (d.inv ? d.inv + ' 個' : ''))}
     ${kv('增加名單', list(d.list_items) || (d.list ? d.list + ' 個' : ''))}
-    ${kv('零售 BV', miniTable(['品項', 'BV', '顧客類型', '顧客'],
-      (d.bv_items || []).map(it => [esc(it.name), esc(it.bv), esc(it.cust_type || ''), esc(it.customer || '')])))}
-    ${kv('零售 IBV', miniTable(['品項', '商店', 'IBV%', '金額', 'IBV點數'],
+    ${kv('獨家代理商品', miniTable(['品項', '類型', '點數', '顧客類型', '顧客'],
+      (d.bv_items || []).map(it => [esc(it.name), esc(it.pt_type || 'BV'), esc(it.bv), esc(it.cust_type || ''), esc(it.customer || '')])))}
+    ${kv('夥伴商店商品', miniTable(['品項', '商店', 'IBV%', '金額', 'IBV點數'],
       (d.ibv_items || []).map(it => [esc(it.name), esc(it.store || ''), esc(it.pct), esc(it.amount), fmt(ibvPoints(it))])))}
     ${kv('BV / IBV 總額', `BV ${fmt(d.bv_total ?? sumBV(d.bv_items))}｜IBV ${fmt(d.ibv_total ?? sumIBV(d.ibv_items))}`)}
     ${kv('專注正向滋養', list(d.focus))}
@@ -2279,8 +2283,8 @@ async function renderAdmin(c) {
     `建立關係：${jn(r.rel_items) || (r.rel ?? 0)}`,
     `邀約碰面：${jn(r.inv_items) || (r.inv ?? 0)}`,
     `增加名單：${jn(r.list_items) || (r.list ?? 0)}`,
-    (r.bv_items || []).length ? `零售BV：${(r.bv_items || []).map(it => `${it.name || ''}${it.bv ? '(' + it.bv + 'BV)' : ''}${it.cust_type ? '/' + it.cust_type : ''}${it.customer ? '/' + it.customer : ''}`).join('；')}` : '',
-    (r.ibv_items || []).length ? `零售IBV：${(r.ibv_items || []).map(it => `${it.name || ''}${it.store ? '@' + it.store : ''}${it.pct ? '/' + it.pct + '%' : ''}${it.amount ? '/$' + it.amount : ''}(${fmt(ibvPoints(it))}pts)`).join('；')}` : '',
+    (r.bv_items || []).length ? `獨家代理：${(r.bv_items || []).map(it => `${it.name || ''}${it.bv ? '(' + it.bv + (it.pt_type || 'BV') + ')' : ''}${it.cust_type ? '/' + it.cust_type : ''}${it.customer ? '/' + it.customer : ''}`).join('；')}` : '',
+    (r.ibv_items || []).length ? `夥伴商店：${(r.ibv_items || []).map(it => `${it.name || ''}${it.store ? '@' + it.store : ''}${it.pct ? '/' + it.pct + '%' : ''}${it.amount ? '/$' + it.amount : ''}(${fmt(ibvPoints(it))}pts)`).join('；')}` : '',
     (r.focus || []).length ? `專注正向滋養：${jn(r.focus)}` : '',
     r.learn ? `學習重點筆記＆心得：${r.learn}` : '',
     r.card ? `NOVA牌卡：${r.card}號 ${NOVA_CARDS[r.card - 1]?.t || ''}` : '',

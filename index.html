@@ -922,7 +922,8 @@ function makeSupabaseApi(sb) {
         fetchAll(() => sb.from(table.daily).select('user_id, period, data').in('user_id', ids)),
         fetchAll(() => sb.from(table.weekly).select('user_id, period, data').in('user_id', ids)),
       ]) : [[], []];
-      const today = todayStr();
+      const today = todayStr(), reviewWk = currentReviewKey();
+      const last7 = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return fmtD(d); });
       const rows = base.map(r => {
         const md = dailies.filter(x => x.user_id === r.id), mw = weeklies.filter(x => x.user_id === r.id);
         const byW = {}, superW = {};
@@ -930,7 +931,13 @@ function makeSupabaseApi(sb) {
         mw.forEach(x => { if ((x.data || x).super_star) superW[x.period] = true; });
         const weeks = [...new Set([...Object.keys(byW), ...Object.keys(superW)])].sort().reverse()
           .map(wk => ({ wk, yellow: byW[wk] || 0, goal: weekStarGoal(wk), super: !!superW[wk] }));
+        // 「已填」與 rate7 也用本地日期自行判定，與 starToday／星星同一個日期基準，
+        // 不再依賴 RPC 的日期（資料庫在 UTC，台灣凌晨 0–8 點會算成前一天）。
+        // monthly 仍取自 RPC：RLS 未開放守護者讀組員的每月紀錄。
         return { ...r, weeks,
+          daily: md.some(x => x.period === today),
+          weekly: mw.some(x => x.period === reviewWk),
+          rate7: Math.round(last7.filter(ds => md.some(x => x.period === ds)).length / 7 * 100),
           starToday: md.some(x => x.period === today && dayQualifies(x)),
           yellowTotal: Object.values(byW).reduce((a, b) => a + b, 0),
           superTotal: Object.keys(superW).length };

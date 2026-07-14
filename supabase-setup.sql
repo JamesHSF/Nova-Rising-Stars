@@ -252,14 +252,21 @@ create policy p_gm_write on public.group_members for all using (public.am_super(
 
 -- ---------- 組長達成率 RPC：以「組長組別（team）」成員為對象（security definer：只回勾勾） ----------
 -- 每週盤點週期為「週六～週五」，且盤點的是已結束的上一週
+-- 台灣時區的「今天」。資料庫跑在 UTC，直接用 now() 會在台灣凌晨 0–8 點算成前一天，
+-- 導致「今日已填」把昨天的紀錄打勾（前端是用瀏覽器本地日期，兩邊會對不上）。
+create or replace function public.tw_today()
+returns date language sql stable as
+$$ select (now() at time zone 'Asia/Taipei')::date $$;
+
 create or replace function public.team_completion()
 returns table (id uuid, name text, role text, daily boolean, weekly boolean, monthly boolean, rate7 int)
 language plpgsql security definer set search_path = public as $$
 declare
   tid uuid;
-  today text := to_char(now(), 'YYYY-MM-DD');
-  reviewwk text := public.week_key((now() - interval '7 days')::date); -- 上一個週六～週五
-  thismonth text := to_char(now(), 'YYYY-MM');
+  d0 date := public.tw_today();                        -- 一律以台灣日期為準
+  today text := to_char(d0, 'YYYY-MM-DD');
+  reviewwk text := public.week_key(d0 - 7);            -- 上一個週六～週五
+  thismonth text := to_char(d0, 'YYYY-MM');
 begin
   tid := public.my_team_id();
   if tid is null then return; end if;
@@ -270,7 +277,7 @@ begin
     exists (select 1 from public.weekly_records w where w.user_id = p.id and w.period = reviewwk),
     exists (select 1 from public.monthly_records m where m.user_id = p.id and m.period = thismonth),
     (select count(distinct d.period)::int * 100 / 7 from public.daily_records d
-      where d.user_id = p.id and d.period >= to_char(now() - interval '6 days', 'YYYY-MM-DD'))
+      where d.user_id = p.id and d.period >= to_char(d0 - 6, 'YYYY-MM-DD'))
   from public.profiles p
   where p.team_id = tid;
 end $$;

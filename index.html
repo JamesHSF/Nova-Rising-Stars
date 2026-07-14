@@ -2108,9 +2108,14 @@ async function renderLeader(c) {
     const recs = await api.teamMemberRecords(b.dataset.mrec);
     const dv = r => r.data || r;
     const fold = (label, inner) => `<details class="recfold"><summary>${label}</summary><div class="recbody">${inner}</div></details>`;
+    // 每一天標示當天有沒有拿到黃星星（與面板、成員自己的軌跡同一套 dayQualifies）
+    const dayStar = r => dayQualifies(r)
+      ? '<span class="pillstat star">🌟 已得</span>'
+      : '<span class="pillstat nostar">☆ 未得</span>';
+    const starDays = recs.daily.filter(r => dayQualifies(r)).length;
     det.innerHTML = `
-      <div class="rechead">📝 每日打卡（${recs.daily.length} 筆）</div>
-      ${recs.daily.length ? recs.daily.map(r => fold(r.period, detailDaily(dv(r)))).join('') : '<span class="muted">尚無每日打卡。</span>'}
+      <div class="rechead">📝 每日打卡（${recs.daily.length} 筆・其中 <b>${starDays}</b> 天得黃星星）</div>
+      ${recs.daily.length ? recs.daily.map(r => fold(`${r.period}　${dayStar(r)}`, detailDaily(dv(r)))).join('') : '<span class="muted">尚無每日打卡。</span>'}
       <div class="rechead" style="margin-top:12px">🎯 每週盤點（${recs.weekly.length} 筆）</div>
       ${recs.weekly.length ? recs.weekly.map(r => fold(weekRangeLabel(r.period), detailWeekly(dv(r)))).join('') : '<span class="muted">尚無每週盤點。</span>'}`;
     det.dataset.filled = '1';

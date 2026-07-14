@@ -583,7 +583,9 @@ const demoApi = (() => {
     // ===== 守護者組別（team）：守護者帶的分組，用 team_id =====
     async myTeam() {
       const db = load(); const u = me();
-      return db.teams.find(t => t.leader_id === u.id || t.leader_id_2 === u.id || t.id === u.team_id) || null;
+      // 先找自己帶的組，沒有才退回自己所屬的組（組長可能同時是別組的組員）
+      return db.teams.find(t => t.leader_id === u.id || t.leader_id_2 === u.id)
+          || db.teams.find(t => t.id === u.team_id) || null;
     },
     async createTeam(name) {           // 守護者建立自己的組別
       const db = load(); const u = me();
@@ -625,7 +627,8 @@ const demoApi = (() => {
     async listTeams() { return load().teams; },
     async teamCompletion() {           // 組長看自己組別成員的狀況＋星星
       const db = load(); const u = me();
-      const t = db.teams.find(t => t.leader_id === u.id || t.leader_id_2 === u.id || t.id === u.team_id);
+      const t = db.teams.find(t => t.leader_id === u.id || t.leader_id_2 === u.id)
+             || db.teams.find(t => t.id === u.team_id);
       if (!t) return { team: null, rows: [] };
       const members = db.users.filter(x => x.team_id === t.id);
       const orangeDays = teamOrangeDays(db.daily, members);
@@ -857,7 +860,12 @@ function makeSupabaseApi(sb) {
     },
     async myTeam() {
       const p = await profile();
-      const { data } = await sb.from('teams').select('*').or(`leader_id.eq.${p.id},leader_id_2.eq.${p.id}${p.team_id ? ',id.eq.' + p.team_id : ''}`).limit(1);
+      // 一律以「自己帶的組」優先，沒帶組才退回「自己所屬的組」（與 SQL 的 my_team_id() 一致）。
+      // 組長常同時是別組的組員，若用 OR 一次查會抓到錯的組。
+      const { data: led } = await sb.from('teams').select('*').or(`leader_id.eq.${p.id},leader_id_2.eq.${p.id}`).limit(1);
+      if (led && led.length) return led[0];
+      if (!p.team_id) return null;
+      const { data } = await sb.from('teams').select('*').eq('id', p.team_id).limit(1);
       return (data && data[0]) || null;
     },
     async createTeam(name) {
@@ -903,31 +911,32 @@ function makeSupabaseApi(sb) {
     },
     async deleteGroup(groupId) { const { error } = await sb.from('groups').delete().eq('id', groupId); throwIf(error); },
     async teamCompletion() {
-      const { data, error } = await sb.rpc('team_completion');
+      const { data, error } = await sb.rpc('team_completion');   // 只取成員清單與「已填」勾勾
       throwIf(error);
       const t = await this.myTeam();
-      // 星星軌跡（security definer RPC，只回傳達成數不含內容）
-      const { data: trails } = await sb.rpc('team_star_trails');
-      const byMember = {};
-      (trails || []).forEach(r => {
-        const m = (byMember[r.member_id] ||= { map: {} });
-        const cur = (m.map[r.week] ||= { wk: r.week, yellow: 0, goal: weekStarGoal(r.week), super: false });
-        cur.yellow = Math.max(cur.yellow, r.yellow || 0); cur.super = cur.super || r.is_super;
+      const base = data || [];
+      const ids = base.map(r => r.id);
+      // 星星一律以前端同一套 dayQualifies 從實際紀錄計算（與成員自己的摘星軌跡、管理面板同標準）。
+      // 不再依賴 SQL 端的星星 RPC，避免 SQL/JS 兩套規則漂移；fetchAll 會把錯誤拋出來，不再靜默歸零。
+      const [dailies, weeklies] = ids.length ? await Promise.all([
+        fetchAll(() => sb.from(table.daily).select('user_id, period, data').in('user_id', ids)),
+        fetchAll(() => sb.from(table.weekly).select('user_id, period, data').in('user_id', ids)),
+      ]) : [[], []];
+      const today = todayStr();
+      const rows = base.map(r => {
+        const md = dailies.filter(x => x.user_id === r.id), mw = weeklies.filter(x => x.user_id === r.id);
+        const byW = {}, superW = {};
+        md.forEach(x => { if (dayQualifies(x)) { const wk = weekOfDay(x.period); byW[wk] = (byW[wk] || 0) + 1; } });
+        mw.forEach(x => { if ((x.data || x).super_star) superW[x.period] = true; });
+        const weeks = [...new Set([...Object.keys(byW), ...Object.keys(superW)])].sort().reverse()
+          .map(wk => ({ wk, yellow: byW[wk] || 0, goal: weekStarGoal(wk), super: !!superW[wk] }));
+        return { ...r, weeks,
+          starToday: md.some(x => x.period === today && dayQualifies(x)),
+          yellowTotal: Object.values(byW).reduce((a, b) => a + b, 0),
+          superTotal: Object.keys(superW).length };
       });
-      // 今日黃星：讀組員今天的每日紀錄（RLS 已允許守護者讀自己組員），前端以 dayQualifies 判定
-      const { data: todayRecs } = await sb.from(table.daily).select('user_id, data').eq('period', todayStr());
-      const starToday = new Set((todayRecs || []).filter(r => dayQualifies(r)).map(r => r.user_id));
-      const rows = (data || []).map(r => {
-        const tt = byMember[r.id] || { map: {} };
-        const weeks = Object.values(tt.map).sort((a, b) => b.wk.localeCompare(a.wk));
-        return { ...r, weeks, starToday: starToday.has(r.id),
-          yellowTotal: weeks.reduce((a, w) => a + w.yellow, 0),
-          superTotal: weeks.filter(w => w.super).length };
-      });
-      // 團隊橘星/彩虹星（security definer RPC，只回傳日期/週別清單）
-      const { data: bonus } = await sb.rpc('team_bonus_stars');
-      const orangeDays = (bonus || []).filter(b => b.kind === 'orange').map(b => b.key);
-      const rainbowWeeks = (bonus || []).filter(b => b.kind === 'rainbow').map(b => b.key);
+      const orangeDays = teamOrangeDays(dailies, base);
+      const rainbowWeeks = teamRainbowWeeks(weeklies, base);
       return { team: t, rows, orangeDays, rainbowWeeks };
     },
     async teamMemberRecords(memberId) { // 守護者看組員每日/每週詳細（RLS 需 is_team_leader_of_user 放行）

@@ -131,6 +131,19 @@ returns boolean language sql security definer stable set search_path = public as
   )
 $$;
 
+-- 解析「我的守護者組別」：一律以「自己帶的組」優先，沒帶組才退回「自己所屬的組」。
+-- （組長常同時是別組的組員。舊寫法用 OR + limit 1 且無排序，兩者皆符合時會隨機挑一組，
+--   導致不同 RPC 解出不同組、與 RLS 判定不一致 → 星星全部歸零卻不報錯。）
+create or replace function public.my_team_id()
+returns uuid language sql security definer stable set search_path = public as $$
+  select coalesce(
+    (select t.id from public.teams t
+      where t.leader_id = auth.uid() or t.leader_id_2 = auth.uid()
+      limit 1),
+    (select p.team_id from public.profiles p where p.id = auth.uid())
+  )
+$$;
+
 create or replace function public.team_of(target_user uuid)
 returns uuid language sql security definer stable set search_path = public as
 $$ select team_id from public.profiles where id = target_user $$;
@@ -248,9 +261,7 @@ declare
   reviewwk text := public.week_key((now() - interval '7 days')::date); -- 上一個週六～週五
   thismonth text := to_char(now(), 'YYYY-MM');
 begin
-  select t.id into tid from public.teams t
-  where (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid())
-     or t.id = (select team_id from public.profiles where profiles.id = auth.uid());
+  tid := public.my_team_id();
   if tid is null then return; end if;
 
   return query
@@ -272,10 +283,7 @@ returns table (member_id uuid, name text, week text, yellow int, is_super boolea
 language plpgsql security definer set search_path = public as $$
 declare tid uuid;
 begin
-  select t.id into tid from public.teams t
-  where (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid())
-     or t.id = (select team_id from public.profiles where profiles.id = auth.uid())
-  limit 1;
+  tid := public.my_team_id();
   if tid is null then return; end if;
 
   return query
@@ -311,10 +319,7 @@ returns table (kind text, key text)
 language plpgsql security definer set search_path = public as $$
 declare tid uuid; n int;
 begin
-  select t.id into tid from public.teams t
-  where (t.leader_id = auth.uid() or t.leader_id_2 = auth.uid())
-     or t.id = (select team_id from public.profiles where profiles.id = auth.uid())
-  limit 1;
+  tid := public.my_team_id();
   if tid is null then return; end if;
   select count(*) into n from public.profiles where team_id = tid;
   if n = 0 then return; end if;

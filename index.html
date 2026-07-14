@@ -179,6 +179,8 @@
   .recfold .recbody { padding: 6px 16px 10px; }
   .distrow { display: flex; gap: 12px; align-items: baseline; padding: 7px 10px; border-radius: 12px; margin-bottom: 6px; background: #f6f3ff; }
   .distn { font-weight: 900; color: var(--violet); min-width: 60px; font-size: 15px; }
+  .distrow.zero { background: #ffe9e9; }
+  .distrow.zero .distn { color: #c23f3f; }
   .distp { font-weight: 700; font-size: 13.5px; line-height: 1.6; }
   .superbox { background: #f3eeff; border: 1.5px solid #e2d8ff; border-radius: 14px; padding: 12px 16px; margin-bottom: 8px; }
   .superhd { font-weight: 900; font-size: 14px; color: #7b3fd4; margin-bottom: 8px; }
@@ -796,6 +798,20 @@ function makeSupabaseApi(sb) {
     cachedProfile = data; return data;
   }
   const throwIf = e => { if (e) throw new Error(e.message); };
+  // PostgREST 單次查詢有筆數上限（Supabase 預設 1000）且會「默默截斷」不報錯，
+  // 統計／匯出一定要分頁抓完，否則資料一多就會少算。
+  // 依「實際回傳筆數」前進，所以伺服器上限即使小於 STEP 也安全；抓到空頁才停。
+  async function fetchAll(build) {
+    const out = [], STEP = 1000;
+    for (let from = 0; ;) {
+      const { data, error } = await build().range(from, from + STEP - 1);
+      throwIf(error);
+      if (!data || !data.length) break;
+      out.push(...data);
+      from += data.length;
+    }
+    return out;
+  }
   return {
     mode: 'supabase',
     async init() {},
@@ -829,8 +845,7 @@ function makeSupabaseApi(sb) {
     },
     async listMine(t) {
       const p = await profile();
-      const { data } = await sb.from(table[t]).select('*').eq('user_id', p.id).order('period', { ascending: false });
-      return data || [];
+      return await fetchAll(() => sb.from(table[t]).select('*').eq('user_id', p.id).order('period', { ascending: false }));
     },
     async myCapabilities() {
       const p = await profile();
@@ -916,32 +931,33 @@ function makeSupabaseApi(sb) {
       return { team: t, rows, orangeDays, rainbowWeeks };
     },
     async teamMemberRecords(memberId) { // 守護者看組員每日/每週詳細（RLS 需 is_team_leader_of_user 放行）
-      const [dd, ww] = await Promise.all([
-        sb.from(table.daily).select('*').eq('user_id', memberId).order('period', { ascending: false }),
-        sb.from(table.weekly).select('*').eq('user_id', memberId).order('period', { ascending: false }),
+      const [daily, weekly] = await Promise.all([
+        fetchAll(() => sb.from(table.daily).select('*').eq('user_id', memberId).order('period', { ascending: false })),
+        fetchAll(() => sb.from(table.weekly).select('*').eq('user_id', memberId).order('period', { ascending: false })),
       ]);
-      return { daily: dd.data || [], weekly: ww.data || [] };
+      return { daily, weekly };
     },
     async allRecords() {
       const p = await profile();
       if (!p.is_super) throw new Error('只有最高管理員可以檢視統計報表');
-      const [users, teams, groups, dd, ww, mm] = await Promise.all([
+      const [users, teams, groups, daily, weekly, monthly] = await Promise.all([
         this.listUsers(), this.listTeams(), this.listGroups(),
-        sb.from(table.daily).select('*'), sb.from(table.weekly).select('*'), sb.from(table.monthly).select('*'),
+        fetchAll(() => sb.from(table.daily).select('*')),
+        fetchAll(() => sb.from(table.weekly).select('*')),
+        fetchAll(() => sb.from(table.monthly).select('*')),
       ]);
-      return { users, teams, groups, daily: dd.data || [], weekly: ww.data || [], monthly: mm.data || [] };
+      return { users, teams, groups, daily, weekly, monthly };
     },
     async groupStatus(groupId) {
       const users = await this.listUsers();
       const members = users.filter(u => (u.group_ids || []).includes(groupId));
       const ids = members.map(m => m.id);
       const g = (await this.listGroups()).find(x => x.id === groupId);
-      const [dd, ww, mm2] = await Promise.all([
-        sb.from(table.daily).select('*').in('user_id', ids),
-        sb.from(table.weekly).select('*').in('user_id', ids),
-        sb.from(table.monthly).select('*').in('user_id', ids),
+      const [dailies, weeklies, monthlies] = await Promise.all([
+        fetchAll(() => sb.from(table.daily).select('*').in('user_id', ids)),
+        fetchAll(() => sb.from(table.weekly).select('*').in('user_id', ids)),
+        fetchAll(() => sb.from(table.monthly).select('*').in('user_id', ids)),
       ]);
-      const dailies = dd.data || [], weeklies = ww.data || [], monthlies = mm2.data || [];
       const t = todayStr(), w = currentReviewKey(), m = monthStr();
       const rows = members.map(mm => {
         const md = dailies.filter(r => r.user_id === mm.id), mw = weeklies.filter(r => r.user_id === mm.id);
@@ -973,13 +989,13 @@ function makeSupabaseApi(sb) {
       await sb.from('nudges').delete().eq('to_id', p.id);
     },
     async listUsers() {
-      const [{ data: profiles }, { data: gm }] = await Promise.all([
-        sb.from('profiles').select('*'),
-        sb.from('group_members').select('*'),
+      const [profiles, gm] = await Promise.all([
+        fetchAll(() => sb.from('profiles').select('*')),
+        fetchAll(() => sb.from('group_members').select('*')),
       ]);
       const byUser = {};
-      (gm || []).forEach(r => { (byUser[r.user_id] ||= []).push(r.group_id); });
-      return (profiles || []).map(p => ({ ...p, group_ids: byUser[p.id] || [] }));
+      gm.forEach(r => { (byUser[r.user_id] ||= []).push(r.group_id); });
+      return profiles.map(p => ({ ...p, group_ids: byUser[p.id] || [] }));
     },
     async listGroups() { const { data } = await sb.from('groups').select('*'); return data || []; },
     async assignUser(userId, patch) { const { error } = await sb.from('profiles').update(patch).eq('id', userId); throwIf(error); },
@@ -997,9 +1013,8 @@ function makeSupabaseApi(sb) {
       const nameOf = id => members.find(m => m.id === id)?.name || id;
       const out = {};
       for (const [k, t] of Object.entries(table)) {
-        const { data, error } = await sb.from(t).select('*').in('user_id', members.map(m => m.id));
-        throwIf(error);
-        out[k] = (data || []).map(r => ({ ...r, ...(r.data || {}), name: nameOf(r.user_id) }));
+        const data = await fetchAll(() => sb.from(t).select('*').in('user_id', members.map(m => m.id)));
+        out[k] = data.map(r => ({ ...r, ...(r.data || {}), name: nameOf(r.user_id) }));
       }
       return out;
     },
@@ -1922,9 +1937,10 @@ function computeStats(data, win) {
   const sumOver = (members, fn) => members.reduce((a, m) => a + fn(m.id), 0);
 
   // 依數量分組（不同數量→有哪些人）
+  // 含 0 顆的人：此期間尚未取得星星者也要現形（他們最需要關心）
   const distByCount = fn => {
     const map = {};
-    data.users.forEach(u => { const n = fn(u.id); if (n > 0) (map[n] ||= []).push(u.name); });
+    data.users.forEach(u => { const n = fn(u.id); (map[n] ||= []).push(u.name); });
     return Object.keys(map).map(Number).sort((a, b) => b - a).map(n => ({ count: n, names: map[n] }));
   };
 
@@ -1957,7 +1973,7 @@ function renderStats(host, data) {
       <tbody>${arr.map((r, i) => `<tr><td>${i + 1}</td>${cols.map(c => `<td>${c.f(r)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>` : '<p class="muted">此期間尚無資料。</p>';
   const distRows = (arr, emoji) => arr.length ? arr.map(d => `
-    <div class="distrow"><span class="distn">${emoji} ${d.count}</span><span class="distp">${d.names.map(esc).join('、')}</span></div>`).join('')
+    <div class="distrow${d.count === 0 ? ' zero' : ''}"><span class="distn">${emoji} ${d.count}</span><span class="distp">${d.names.map(esc).join('、')}</span></div>`).join('')
     : '<p class="muted">此期間尚無資料。</p>';
 
   function paint() {
@@ -1970,10 +1986,10 @@ function renderStats(host, data) {
           ${Object.entries(WIN_LABELS).map(([k, v]) => `<button data-win="${k}" class="${win === k ? 'active' : ''}">${v}</button>`).join('')}
         </div>
 
-        <h3>🌟 黃色星星分布 <span class="muted">不同數量各有哪些人</span></h3>
+        <h3>🌟 黃色星星分布 <span class="muted">不同數量各有哪些人・0 顆（紅底）＝此期間尚未取得</span></h3>
         ${distRows(s.yellowDist, '🌟')}
 
-        <h3>✦ 紫色星星分布 <span class="muted">不同數量各有哪些人</span></h3>
+        <h3>✦ 紫色星星分布 <span class="muted">不同數量各有哪些人・0 顆（紅底）＝此期間尚未取得</span></h3>
         ${distRows(s.purpleDist, '✦')}
 
         <h3>🏅 各組別星星排行 <span class="muted">${WIN_LABELS[win]}・黃星星/紫星/守護星/北極星</span></h3>

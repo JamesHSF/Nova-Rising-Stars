@@ -132,6 +132,8 @@
   .pillstat.none { background: #ffe1e1; color: #c23f3f; }
   .pillstat.ok { background: #d9f7e8; color: #0b8a4e; }
   .pillstat.no { background: #f1eefb; color: #9a90bd; }
+  .pillstat.star { background: #fff3d6; color: #a07500; border: 1.5px solid #ffcf3f; }
+  .pillstat.nostar { background: #f4f2fa; color: #a79ec6; border: 1.5px solid #e6dff7; }
 
   /* number trio */
   .trio { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 12px; }
@@ -523,6 +525,7 @@ const demoApi = (() => {
       return {
         id: mm.id, name: mm.name, role: mm.role,
         daily: db.daily.some(r => r.user_id === mm.id && r.period === t),
+        starToday: db.daily.some(r => r.user_id === mm.id && r.period === t && dayQualifies(r)),  // 今天是否已拿到黃星星
         weekly: db.weekly.some(r => r.user_id === mm.id && r.period === w),
         monthly: db.monthly.some(r => r.user_id === mm.id && r.period === m),
         rate7: Math.round(done7 / 7 * 100),
@@ -896,10 +899,13 @@ function makeSupabaseApi(sb) {
         const cur = (m.map[r.week] ||= { wk: r.week, yellow: 0, goal: weekStarGoal(r.week), super: false });
         cur.yellow = Math.max(cur.yellow, r.yellow || 0); cur.super = cur.super || r.is_super;
       });
+      // 今日黃星：讀組員今天的每日紀錄（RLS 已允許守護者讀自己組員），前端以 dayQualifies 判定
+      const { data: todayRecs } = await sb.from(table.daily).select('user_id, data').eq('period', todayStr());
+      const starToday = new Set((todayRecs || []).filter(r => dayQualifies(r)).map(r => r.user_id));
       const rows = (data || []).map(r => {
         const tt = byMember[r.id] || { map: {} };
         const weeks = Object.values(tt.map).sort((a, b) => b.wk.localeCompare(a.wk));
-        return { ...r, weeks,
+        return { ...r, weeks, starToday: starToday.has(r.id),
           yellowTotal: weeks.reduce((a, w) => a + w.yellow, 0),
           superTotal: weeks.filter(w => w.super).length };
       });
@@ -946,6 +952,7 @@ function makeSupabaseApi(sb) {
           .map(wk => ({ wk, yellow: byW[wk] || 0, goal: weekStarGoal(wk), super: !!superW[wk] }));
         return { id: mm.id, name: mm.name, role: mm.role,
           daily: md.some(r => r.period === t), weekly: mw.some(r => r.period === w),
+          starToday: md.some(r => r.period === t && dayQualifies(r)),   // 今天是否已拿到黃星星
           monthly: monthlies.some(r => r.user_id === mm.id && r.period === m),
           rate7: 0, yellowTotal: Object.values(byW).reduce((a, b) => a + b, 0), superTotal: Object.keys(superW).length, weeks };
       });
@@ -2028,6 +2035,8 @@ async function renderLeader(c) {
     return;
   }
   const mark = ok => ok ? '<span class="pillstat ok">✓ 已填</span>' : '<span class="pillstat no">未填</span>';
+  // 今日黃星星：有打卡 ≠ 有拿到星星（還需業務達低標＋專注滋養≥1＋寫日記）
+  const starMark = ok => ok ? '<span class="pillstat star">🌟 已得</span>' : '<span class="pillstat nostar">☆ 未得</span>';
   c.innerHTML = `
     <div class="panel">
       <h2>🛡️ 守護者面板 — ${esc(team.name)} <span class="muted">我的組別・達成狀況、星星與每日/每週詳細資料</span></h2>
@@ -2044,6 +2053,7 @@ async function renderLeader(c) {
             <div class="sub">近 7 日打卡率 ${r.rate7}%　🌟 黃星星 ${r.yellowTotal}　✦ 紫星 ${r.superTotal}</div>
           </div>
           <div class="right">
+            <span class="sub">今日黃星</span>${starMark(r.starToday)}
             <span class="sub">今日</span>${mark(r.daily)}
             <span class="sub">本週</span>${mark(r.weekly)}
             <span class="sub">本月</span>${mark(r.monthly)}
@@ -2253,6 +2263,7 @@ async function renderAdmin(c) {
 
   // 組員狀況（每日/每週/每月 + 星星），只顯示達成狀態
   const markS = ok => ok ? '<span class="pillstat ok">✓ 已填</span>' : '<span class="pillstat no">未填</span>';
+  const starMarkS = ok => ok ? '<span class="pillstat star">🌟 已得</span>' : '<span class="pillstat nostar">☆ 未得</span>';
   c.querySelectorAll('[data-status]').forEach(b => b.onclick = async () => {
     const det = c.querySelector(`[data-statusd="${b.dataset.status}"]`);
     if (det.dataset.filled) { det.classList.toggle('hidden'); return; }
@@ -2262,6 +2273,7 @@ async function renderAdmin(c) {
         <div><div class="nm">${esc(r.name)} <span class="muted">${ROLE_EMOJI[r.role] || ''}</span></div>
           <div class="sub">🌟 黃星星 ${r.yellowTotal}　✦ 紫星 ${r.superTotal}</div></div>
         <div class="right">
+          <span class="sub">今日黃星</span>${starMarkS(r.starToday)}
           <span class="sub">今日</span>${markS(r.daily)}
           <span class="sub">本週</span>${markS(r.weekly)}
           <span class="sub">本月</span>${markS(r.monthly)}

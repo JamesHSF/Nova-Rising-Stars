@@ -54,7 +54,7 @@
   .panel h2 { font-size: 17px; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .panel h2 { margin-bottom: 20px; }
   .panel h3 { font-size: 15px; margin: 38px 0 14px; padding-top: 26px; border-top: 1px solid #f0ecfa; color: var(--ink); }
-  .panel h2 + h3, .panel h3:first-child, #dataView h3 { margin-top: 14px; padding-top: 0; border-top: none; }
+  .panel h2 + h3, .panel h3:first-child { margin-top: 14px; padding-top: 0; border-top: none; }
   .panel h3.hd-blue { color: #2f6fd0; }
   .panel h3.hd-red { color: #d63a3a; }
   .panel h3.hd-earth { color: #9a6b2f; }
@@ -684,6 +684,18 @@ const demoApi = (() => {
       const members = db.users.filter(x => (x.group_ids || []).includes(groupId));
       return { group: g, rows: memberStatusRows(db, members) };
     },
+    async groupMemberRecords(memberId) {   // 業務組別管理員看組員每日/每週/每月詳細
+      const db = load(); const u = me();
+      const mem = db.users.find(x => x.id === memberId);
+      const canView = u.is_super || db.groups.some(g => g.admin_id === u.id && (mem?.group_ids || []).includes(g.id));
+      if (!canView) throw new Error('只有該業務組別的管理員可以檢視組員詳細資料');
+      const sort = arr => arr.sort((a, b) => b.period.localeCompare(a.period));
+      return {
+        daily: sort(db.daily.filter(r => r.user_id === memberId)),
+        weekly: sort(db.weekly.filter(r => r.user_id === memberId)),
+        monthly: sort(db.monthly.filter(r => r.user_id === memberId)),
+      };
+    },
     async sendNudge(toId, message) {
       const db = load(); const u = me();
       db.nudges.push({ id: uid(db), from_name: u.name, to_id: toId, message, date: todayStr() });
@@ -992,13 +1004,23 @@ function makeSupabaseApi(sb) {
         mw.forEach(r => { if ((r.data || r).super_star) superW[r.period] = true; });
         const weeks = [...new Set([...Object.keys(byW), ...Object.keys(superW)])].sort().reverse()
           .map(wk => ({ wk, yellow: byW[wk] || 0, goal: weekStarGoal(wk), super: !!superW[wk] }));
+        const last7 = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return fmtD(d); });
         return { id: mm.id, name: mm.name, role: mm.role,
           daily: md.some(r => r.period === t), weekly: mw.some(r => r.period === w),
           starToday: md.some(r => r.period === t && dayQualifies(r)),   // 今天是否已拿到黃星星
           monthly: monthlies.some(r => r.user_id === mm.id && r.period === m),
-          rate7: 0, yellowTotal: Object.values(byW).reduce((a, b) => a + b, 0), superTotal: Object.keys(superW).length, weeks };
+          rate7: Math.round(last7.filter(ds => md.some(r => r.period === ds)).length / 7 * 100),
+          yellowTotal: Object.values(byW).reduce((a, b) => a + b, 0), superTotal: Object.keys(superW).length, weeks };
       });
       return { group: g, rows };
+    },
+    async groupMemberRecords(memberId) {   // 業務組別管理員看組員每日/每週/每月詳細（RLS is_admin_of_user 放行）
+      const [daily, weekly, monthly] = await Promise.all([
+        fetchAll(() => sb.from(table.daily).select('*').eq('user_id', memberId).order('period', { ascending: false })),
+        fetchAll(() => sb.from(table.weekly).select('*').eq('user_id', memberId).order('period', { ascending: false })),
+        fetchAll(() => sb.from(table.monthly).select('*').eq('user_id', memberId).order('period', { ascending: false })),
+      ]);
+      return { daily, weekly, monthly };
     },
     async sendNudge(toId, message) {
       const p = await profile();
@@ -2057,6 +2079,71 @@ function renderStats(host, data) {
 }
 
 /* =========================================================
+   共用：成員狀況列（守護者面板與業務組別組員檢視共用同一套呈現）
+   ========================================================= */
+const _mark = ok => ok ? '<span class="pillstat ok">✓ 已填</span>' : '<span class="pillstat no">未填</span>';
+const _starMark = ok => ok ? '<span class="pillstat star">🌟 已得</span>' : '<span class="pillstat nostar">☆ 未得</span>';
+function memberRowsHTML(rows) {
+  return rows.map((r, i) => `
+    <div class="mrow">
+      <div class="avatar" style="background:${AVATAR_COLORS[i % AVATAR_COLORS.length]}">${esc(r.name[0] || '?')}</div>
+      <div>
+        <div class="nm">${esc(r.name)} <span class="muted">${ROLE_EMOJI[r.role] || ''}</span></div>
+        <div class="sub">近 7 日打卡率 ${r.rate7}%　🌟 黃星星 ${r.yellowTotal}　✦ 紫星 ${r.superTotal}</div>
+      </div>
+      <div class="right">
+        <span class="sub">今日黃星</span>${_starMark(r.starToday)}
+        <span class="sub">今日</span>${_mark(r.daily)}
+        <span class="sub">本週</span>${_mark(r.weekly)}
+        <span class="sub">本月</span>${_mark(r.monthly)}
+        <button class="btn small ghost" data-wk="${i}">📅 每週紀錄</button>
+        <button class="btn small ghost" data-mrec="${r.id}" data-i="${i}">📄 詳細資料</button>
+        <button class="btn small ghost" data-nudge="${r.id}" data-name="${esc(r.name)}">🔔 提醒</button>
+      </div>
+    </div>
+    <div class="hdetail hidden" data-wkd="${i}">
+      ${r.weeks.length === 0 ? '<span class="muted">這位成員還沒有打卡星星。</span>' :
+        r.weeks.map(wk => `<div class="traktrow">
+          <span class="wk">${weekRangeLabel(wk.wk)}</span>
+          <span class="starrow">${starSlots(wk.yellow, wk.goal, wk.super)}</span>
+          <span class="muted" style="margin-left:auto">${wk.yellow}/${wk.goal} 天${wk.super ? '・紫星 ✦' : ''}</span>
+        </div>`).join('')}
+    </div>
+    <div class="hdetail hidden" data-mrecd="${i}"></div>`).join('');
+}
+// host = 包住上述列的容器（多組並存時各自 scope，避免 index 衝突）；fetchRecords(id)→{daily,weekly,monthly?}
+function wireMemberRows(host, fetchRecords) {
+  host.querySelectorAll('[data-wk]').forEach(b => b.onclick = () =>
+    host.querySelector(`[data-wkd="${b.dataset.wk}"]`).classList.toggle('hidden'));
+  host.querySelectorAll('[data-mrec]').forEach(b => b.onclick = async () => {
+    const det = host.querySelector(`[data-mrecd="${b.dataset.i}"]`);
+    if (det.dataset.filled) { det.classList.toggle('hidden'); return; }
+    det.innerHTML = '<span class="muted">載入中…</span>'; det.classList.remove('hidden');
+    let recs;
+    try { recs = await fetchRecords(b.dataset.mrec); }
+    catch (e) { det.innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+    const dv = r => r.data || r;
+    const fold = (label, inner) => `<details class="recfold"><summary>${label}</summary><div class="recbody">${inner}</div></details>`;
+    const dayStar = r => dayQualifies(r) ? '<span class="pillstat star">🌟 已得</span>' : '<span class="pillstat nostar">☆ 未得</span>';
+    const starDays = recs.daily.filter(r => dayQualifies(r)).length;
+    det.innerHTML = `
+      <div class="rechead">📝 每日打卡（${recs.daily.length} 筆・其中 <b>${starDays}</b> 天得黃星星）</div>
+      ${recs.daily.length ? recs.daily.map(r => fold(`${r.period}　${dayStar(r)}`, detailDaily(dv(r)))).join('') : '<span class="muted">尚無每日打卡。</span>'}
+      <div class="rechead" style="margin-top:12px">🎯 每週盤點（${recs.weekly.length} 筆）</div>
+      ${recs.weekly.length ? recs.weekly.map(r => fold(weekRangeLabel(r.period), detailWeekly(dv(r)))).join('') : '<span class="muted">尚無每週盤點。</span>'}
+      ${recs.monthly ? `<div class="rechead" style="margin-top:12px">🌕 每月累積（${recs.monthly.length} 筆）</div>
+      ${recs.monthly.length ? recs.monthly.map(r => fold(r.period, detailMonthly(dv(r)))).join('') : '<span class="muted">尚無每月累積。</span>'}` : ''}`;
+    det.dataset.filled = '1';
+  });
+  host.querySelectorAll('[data-nudge]').forEach(b => b.onclick = async () => {
+    const msg = prompt(`要對 ${b.dataset.name} 說什麼？`, '記得完成今天的打卡喔！⭐');
+    if (msg === null) return;
+    await api.sendNudge(b.dataset.nudge, msg || '記得打卡喔！');
+    toast(`已提醒 ${b.dataset.name} 🔔`);
+  });
+}
+
+/* =========================================================
    組長面板 — 只看達成率，看不到數字與內容
    ========================================================= */
 async function renderLeader(c) {
@@ -2080,9 +2167,6 @@ async function renderLeader(c) {
     };
     return;
   }
-  const mark = ok => ok ? '<span class="pillstat ok">✓ 已填</span>' : '<span class="pillstat no">未填</span>';
-  // 今日黃星星：有打卡 ≠ 有拿到星星（還需業務達低標＋專注滋養≥1＋寫日記）
-  const starMark = ok => ok ? '<span class="pillstat star">🌟 已得</span>' : '<span class="pillstat nostar">☆ 未得</span>';
   c.innerHTML = `
     <div class="panel">
       <h2>🛡️ 守護者面板 — ${esc(team.name)} <span class="muted">我的組別・達成狀況、星星與每日/每週詳細資料</span></h2>
@@ -2091,63 +2175,9 @@ async function renderLeader(c) {
         <div class="bstar rainbow"><span class="ic">✴️</span><div><b>${rainbowWeeks.length}</b> 顆北極星<div class="muted">全員該週都得紫星的週數</div></div></div>
       </div>
       ${rows.length === 0 ? '<p class="muted">目前組內沒有成員，請最高管理員將成員分配進你的組別。</p>' : ''}
-      ${rows.map((r, i) => `
-        <div class="mrow">
-          <div class="avatar" style="background:${AVATAR_COLORS[i % AVATAR_COLORS.length]}">${esc(r.name[0] || '?')}</div>
-          <div>
-            <div class="nm">${esc(r.name)} <span class="muted">${ROLE_EMOJI[r.role] || ''}</span></div>
-            <div class="sub">近 7 日打卡率 ${r.rate7}%　🌟 黃星星 ${r.yellowTotal}　✦ 紫星 ${r.superTotal}</div>
-          </div>
-          <div class="right">
-            <span class="sub">今日黃星</span>${starMark(r.starToday)}
-            <span class="sub">今日</span>${mark(r.daily)}
-            <span class="sub">本週</span>${mark(r.weekly)}
-            <span class="sub">本月</span>${mark(r.monthly)}
-            <button class="btn small ghost" data-wk="${i}">📅 每週紀錄</button>
-            <button class="btn small ghost" data-mrec="${r.id}" data-i="${i}">📄 詳細資料</button>
-            <button class="btn small ghost" data-nudge="${r.id}" data-name="${esc(r.name)}">🔔 提醒</button>
-          </div>
-        </div>
-        <div class="hdetail hidden" data-wkd="${i}">
-          ${r.weeks.length === 0 ? '<span class="muted">這位組員還沒有打卡星星。</span>' :
-            r.weeks.map(wk => `<div class="traktrow">
-              <span class="wk">${weekRangeLabel(wk.wk)}</span>
-              <span class="starrow">${starSlots(wk.yellow, wk.goal, wk.super)}</span>
-              <span class="muted" style="margin-left:auto">${wk.yellow}/${wk.goal} 天${wk.super ? '・紫星 ✦' : ''}</span>
-            </div>`).join('')}
-        </div>
-        <div class="hdetail hidden" data-mrecd="${i}"></div>`).join('')}
+      <div id="leaderRows">${memberRowsHTML(rows)}</div>
     </div>`;
-  c.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => {
-    const det = c.querySelector(`[data-wkd="${b.dataset.wk}"]`);
-    det.classList.toggle('hidden');
-  });
-  // 成員每日/每週詳細資料（守護者可見完整填寫內容）
-  c.querySelectorAll('[data-mrec]').forEach(b => b.onclick = async () => {
-    const det = c.querySelector(`[data-mrecd="${b.dataset.i}"]`);
-    if (det.dataset.filled) { det.classList.toggle('hidden'); return; }
-    const recs = await api.teamMemberRecords(b.dataset.mrec);
-    const dv = r => r.data || r;
-    const fold = (label, inner) => `<details class="recfold"><summary>${label}</summary><div class="recbody">${inner}</div></details>`;
-    // 每一天標示當天有沒有拿到黃星星（與面板、成員自己的軌跡同一套 dayQualifies）
-    const dayStar = r => dayQualifies(r)
-      ? '<span class="pillstat star">🌟 已得</span>'
-      : '<span class="pillstat nostar">☆ 未得</span>';
-    const starDays = recs.daily.filter(r => dayQualifies(r)).length;
-    det.innerHTML = `
-      <div class="rechead">📝 每日打卡（${recs.daily.length} 筆・其中 <b>${starDays}</b> 天得黃星星）</div>
-      ${recs.daily.length ? recs.daily.map(r => fold(`${r.period}　${dayStar(r)}`, detailDaily(dv(r)))).join('') : '<span class="muted">尚無每日打卡。</span>'}
-      <div class="rechead" style="margin-top:12px">🎯 每週盤點（${recs.weekly.length} 筆）</div>
-      ${recs.weekly.length ? recs.weekly.map(r => fold(weekRangeLabel(r.period), detailWeekly(dv(r)))).join('') : '<span class="muted">尚無每週盤點。</span>'}`;
-    det.dataset.filled = '1';
-    det.classList.remove('hidden');
-  });
-  c.querySelectorAll('[data-nudge]').forEach(b => b.onclick = async () => {
-    const msg = prompt(`要對 ${b.dataset.name} 說什麼？`, '記得完成今天的打卡喔！⭐');
-    if (msg === null) return;
-    await api.sendNudge(b.dataset.nudge, msg || '記得打卡喔！');
-    toast(`已提醒 ${b.dataset.name} 🔔`);
-  });
+  wireMemberRows($('#leaderRows'), id => api.teamMemberRecords(id));
 }
 
 /* =========================================================
@@ -2242,24 +2272,15 @@ async function renderAdmin(c) {
       </div>`;
   }
 
-  // 業務組別管理員（含最高管理員）：檢視組員每日／每週／每月狀況與資料
-  html += `
-    <div class="panel">
-      <h2>📊 業務組別 — 組員狀況與資料 <span class="muted">${isSuper ? '最高管理員可檢視所有組別' : '僅顯示你被指派管理的業務組別'}</span></h2>
-      ${myGroups.length === 0 ? '<p class="muted">目前沒有可檢視的業務組別。</p>' : ''}
-      ${myGroups.map(g => `
-        <div class="mrow">
-          <div class="avatar" style="background:var(--teal)">📁</div>
-          <div><div class="nm">${esc(g.name)}</div><div class="sub">管理員：${esc(uname(g.admin_id))}</div></div>
-          <div class="right">
-            <button class="btn small" data-status="${g.id}">📅 組員狀況</button>
-            <button class="btn small" data-view="${g.id}">📄 檢視資料</button>
-            <button class="btn small gold" data-csv="${g.id}">⬇️ 匯出EXCEL</button>
-          </div>
-        </div>
-        <div class="hdetail hidden" data-statusd="${g.id}"></div>`).join('')}
-      <div id="dataView"></div>
-    </div>`;
+  // 業務組別管理員（含最高管理員）：以與守護者面板相同的框架呈現，但以業務組別分組
+  html += myGroups.length === 0
+    ? `<div class="panel"><h2>📊 業務組別 — 組員狀況與資料</h2><p class="muted">目前沒有可檢視的業務組別。</p></div>`
+    : myGroups.map(g => `
+      <div class="panel">
+        <h2>📊 ${esc(g.name)} <span class="muted">業務組別・管理員 ${esc(uname(g.admin_id))}・成員 ${users.filter(u => (u.group_ids || []).includes(g.id)).length} 人</span>
+          <button class="btn small gold" data-csv="${g.id}" style="margin-left:auto">⬇️ 匯出EXCEL</button></h2>
+        <div data-grprows="${g.id}"><span class="muted">載入組員狀況中…</span></div>
+      </div>`).join('');
 
   if (isSuper) html += '<div id="statsPanel"></div>';
 
@@ -2268,6 +2289,17 @@ async function renderAdmin(c) {
   if (isSuper) {
     try { renderStats($('#statsPanel'), await api.allRecords()); }
     catch (e) { $('#statsPanel').innerHTML = `<div class="panel"><span class="err">${esc(e.message)}</span></div>`; }
+  }
+
+  // 每個業務組別的組員狀況列，採與守護者面板相同的呈現（每組各自 scope 事件）
+  for (const g of myGroups) {
+    const host = c.querySelector(`[data-grprows="${g.id}"]`);
+    if (!host) continue;
+    try {
+      const { rows } = await api.groupStatus(g.id);
+      host.innerHTML = rows.length === 0 ? '<p class="muted">此組尚無成員。</p>' : memberRowsHTML(rows);
+      if (rows.length) wireMemberRows(host, id => api.groupMemberRecords(id));
+    } catch (e) { host.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
   }
 
   c.querySelectorAll('[data-role-for]').forEach(s => s.onchange = async () => {
@@ -2312,33 +2344,6 @@ async function renderAdmin(c) {
     await api.createTeamAsAdmin(name, $('#tLeader').value || null); toast('守護者組別已建立'); showTab('admin');
   };
 
-  // 組員狀況（每日/每週/每月 + 星星），只顯示達成狀態
-  const markS = ok => ok ? '<span class="pillstat ok">✓ 已填</span>' : '<span class="pillstat no">未填</span>';
-  const starMarkS = ok => ok ? '<span class="pillstat star">🌟 已得</span>' : '<span class="pillstat nostar">☆ 未得</span>';
-  c.querySelectorAll('[data-status]').forEach(b => b.onclick = async () => {
-    const det = c.querySelector(`[data-statusd="${b.dataset.status}"]`);
-    if (det.dataset.filled) { det.classList.toggle('hidden'); return; }
-    const { rows } = await api.groupStatus(b.dataset.status);
-    det.innerHTML = rows.length === 0 ? '<span class="muted">此組尚無成員。</span>' : rows.map(r => `
-      <div class="mrow" style="background:#fff">
-        <div><div class="nm">${esc(r.name)} <span class="muted">${ROLE_EMOJI[r.role] || ''}</span></div>
-          <div class="sub">🌟 黃星星 ${r.yellowTotal}　✦ 紫星 ${r.superTotal}</div></div>
-        <div class="right">
-          <span class="sub">今日黃星</span>${starMarkS(r.starToday)}
-          <span class="sub">今日</span>${markS(r.daily)}
-          <span class="sub">本週</span>${markS(r.weekly)}
-          <span class="sub">本月</span>${markS(r.monthly)}
-        </div>
-      </div>
-      ${r.weeks.map(wk => `<div class="traktrow" style="margin-left:14px">
-        <span class="wk">${weekRangeLabel(wk.wk)}</span>
-        <span class="starrow">${starSlots(wk.yellow, wk.goal, wk.super)}</span>
-        <span class="muted" style="margin-left:auto">${wk.yellow}/${wk.goal} 天${wk.super ? '・紫星 ✦' : ''}</span>
-      </div>`).join('')}`).join('');
-    det.dataset.filled = '1';
-    det.classList.remove('hidden');
-  });
-
   const flatten = rec => { const d = rec.data || rec; return { ...rec, ...d }; };
   const DATA_HEADERS = ['類型', '成員', '期間', '執行', 'BV', 'IBV', '完整內容'];
   const jn = a => (a || []).filter(Boolean).join('、');
@@ -2377,15 +2382,6 @@ async function renderAdmin(c) {
     recs.monthly.map(flatten).forEach(r => rows.push(['每月', r.name, r.period, `店長 ${(r.new_managers || []).filter(Boolean).length} 位`, fmt(r.bv ?? r.bv_sum ?? 0), fmt(r.ibv ?? r.ibv_sum ?? 0), detailMonthlyText(r)]));
     return rows;
   };
-  c.querySelectorAll('[data-view]').forEach(b => b.onclick = async () => {
-    const rows = buildDataRows(await api.groupRecords(b.dataset.view));
-    $('#dataView').innerHTML = `
-      <h3 style="margin-top:18px">📄 組別資料（${rows.length} 筆）</h3>
-      <div class="datatable-wrap"><table class="data">
-        <thead><tr>${DATA_HEADERS.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map(r => `<tr>${r.map(cell => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${DATA_HEADERS.length}" class="muted">尚無資料</td></tr>`}</tbody>
-      </table></div>`;
-  });
   c.querySelectorAll('[data-csv]').forEach(b => b.onclick = async () => {
     const rows = buildDataRows(await api.groupRecords(b.dataset.csv));
     exportExcel(DATA_HEADERS, rows, `摘星計畫-組別資料-${todayStr()}.xls`);

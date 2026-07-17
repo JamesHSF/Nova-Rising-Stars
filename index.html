@@ -1298,10 +1298,11 @@ function showSevenStarCelebration() {
   wrap.querySelector('#celebrateClose').onclick = close;
 }
 // 存打卡後呼叫：這天有拿到黃星星、且全期間累積首次達 7 顆時，跳一次慶祝
-async function maybeCelebrateSevenStars(savedData) {
+async function maybeCelebrateSevenStars() {
   const key = 'nova-7star-' + (currentUser?.id || 'me');
   if (localStorage.getItem(key)) return;              // 已慶祝過（該裝置）
-  if (!dayQualifies({ data: savedData })) return;     // 這天沒拿到星星就不觸發
+  // 每次送出打卡都重新算「全期間累積合格黃星星天數」，首次達 7 顆就慶祝。
+  // 不再要求「這次打卡當天達標」——否則上線前就滿 7 顆的人若下次打卡未達標會永遠不跳。
   const total = (await api.listMine('daily')).filter(r => dayQualifies(r)).length;
   if (total < 7) return;
   localStorage.setItem(key, '1');
@@ -1449,7 +1450,7 @@ async function renderDaily(c, period) {
     await api.saveRecord('daily', t, { data });
     await resyncSuperStar(weekOfDay(t));   // 改動後補算該週紫色超星星
     toast(isEdit ? '✅ 已更新並覆蓋原紀錄！' : '🌟 打卡成功！');
-    await maybeCelebrateSevenStars(data);  // 累積滿 7 顆黃星星→啟程慶祝＋影片（一生一次）
+    await maybeCelebrateSevenStars();  // 累積滿 7 顆黃星星→啟程慶祝＋影片（一生一次）
     showTab(isEdit ? 'history' : 'daily');
   };
   wireBackToTrail();

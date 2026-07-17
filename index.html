@@ -273,6 +273,17 @@
   table.data td { padding: 7px 10px; border-bottom: 1.5px solid #f1eefb; vertical-align: top; }
   table.data tr:hover td { background: #faf8ff; }
 
+  /* 累積滿 7 顆黃星星的啟程慶祝 */
+  .celebrate-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(30,20,60,.72); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; animation: cfade .3s; }
+  @keyframes cfade { from { opacity: 0; } }
+  .celebrate-box { background: linear-gradient(160deg, #fff8ec, #ffe9f4 60%, #efe4ff); border-radius: 24px; padding: 28px 26px 24px; max-width: 560px; width: 100%; text-align: center; box-shadow: 0 24px 60px rgba(40,20,90,.5); border: 2px solid #ffcf3f; animation: pop .45s cubic-bezier(.34,1.56,.64,1); max-height: 92vh; overflow-y: auto; }
+  .celebrate-stars { font-size: 30px; letter-spacing: 3px; margin-bottom: 12px; filter: drop-shadow(0 0 8px rgba(255,207,63,.7)); }
+  .celebrate-msg { font-size: 19px; font-weight: 900; color: #7a3fd0; line-height: 1.9; margin-bottom: 18px; }
+  .celebrate-video { border-radius: 16px; overflow: hidden; margin-bottom: 18px; }
+  .milvid { display: block; border: none; }
+  iframe.milvid { width: 100%; aspect-ratio: 16 / 9; }        /* YouTube／Vimeo 橫式滿版 */
+  video.milvid { display: block; margin: 0 auto; height: 64vh; aspect-ratio: 9 / 16; max-width: 100%; object-fit: contain; background: #000; border-radius: 16px; }  /* 直式 9:16 播放器置中 */
+  .vidph { color: var(--ink-soft); font-weight: 700; font-size: 13px; padding: 26px 18px; background: #f3eefb; line-height: 1.8; }
   .toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(80px); z-index: 99;
     background: #372a5e; color: #fff; font-weight: 800; font-size: 14px; border-radius: 999px; padding: 12px 26px;
     box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: transform .3s cubic-bezier(.34,1.56,.64,1); pointer-events: none; }
@@ -359,6 +370,7 @@ const CONFIG = {
   SUPABASE_URL: 'https://xpjyimhlvalhqplulsfw.supabase.co',            // 例如 'https://xxxx.supabase.co'
   SUPABASE_ANON_KEY: 'sb_publishable_DkwL7cN2x2v9So3rCVa6Zg_W5NwWDQR',       // Project Settings → API → anon/publishable key
   GOOGLE_CALENDAR_EMBED: '<iframe src="https://calendar.google.com/calendar/embed?src=a28cd94b3617824a894a6bbbbc049cbe16c5f786dce9f16f590dfe94e27968d5%40group.calendar.google.com&ctz=Asia%2FTaipei" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>',   // 直接貼 Google 日曆的整段 <iframe> 嵌入碼或只貼 src 網址皆可（選填）
+  MILESTONE_VIDEO: 'https://vid.cdn-website.com/d77c7efe/videos/AoLiy6pGSyeCVqTY1Pgb_805987674.489624-v.mp4',   // 「挖掘星星的旅程」影片：貼 YouTube／Vimeo 網址或 .mp4 直連即可（累積滿 7 顆黃星星時播放・留空僅顯示恭喜訊息）
 };
 // 相容：CONFIG.GOOGLE_CALENDAR_EMBED 可貼「整段 iframe 嵌入碼」或只貼 src 網址，統一取出真正的 src
 const CAL_EMBED_SRC = (() => {
@@ -1256,6 +1268,47 @@ function dynTable(host, cols, rows, onChange) {
 }
 
 /* =========================================================
+   累積滿 7 顆黃星星的啟程慶祝（一生一次，存打卡時判定）
+   ========================================================= */
+const MILESTONE_MSG = '恭喜你踏入摘星計畫的啟程，<br>拿到屬於自己的七顆黃星星。';
+// 依影片網址自動判斷嵌入方式：YouTube／Vimeo→iframe、.mp4→video、留空→佔位提示
+function milestoneVideoHTML(url) {
+  url = (url || '').trim();
+  if (!url) return '<div class="vidph">🎬「挖掘星星的旅程」影片尚未設定<br>之後在 index.html 最上方 CONFIG.MILESTONE_VIDEO 填入 YouTube／Vimeo 網址或 .mp4 直連即可自動播放。</div>';
+  let m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{6,})/);
+  if (m) return `<iframe class="milvid" src="https://www.youtube.com/embed/${m[1]}?autoplay=1&rel=0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
+  m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (m) return `<iframe class="milvid" src="https://player.vimeo.com/video/${m[1]}?autoplay=1" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(url)) return `<video class="milvid" src="${esc(url)}" controls autoplay playsinline></video>`;
+  return `<iframe class="milvid" src="${esc(url)}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+}
+function showSevenStarCelebration() {
+  const wrap = document.createElement('div');
+  wrap.className = 'celebrate-overlay';
+  wrap.innerHTML = `
+    <div class="celebrate-box">
+      <div class="celebrate-stars">🌟🌟🌟🌟🌟🌟🌟</div>
+      <div class="celebrate-msg">${MILESTONE_MSG}</div>
+      <div class="celebrate-video">${milestoneVideoHTML(CONFIG.MILESTONE_VIDEO)}</div>
+      <button class="btn gold" id="celebrateClose">繼續我的摘星旅程 ✨</button>
+    </div>`;
+  const close = () => wrap.remove();
+  wrap.addEventListener('click', e => { if (e.target === wrap) close(); });  // 點背景關閉
+  document.body.appendChild(wrap);
+  wrap.querySelector('#celebrateClose').onclick = close;
+}
+// 存打卡後呼叫：這天有拿到黃星星、且全期間累積首次達 7 顆時，跳一次慶祝
+async function maybeCelebrateSevenStars(savedData) {
+  const key = 'nova-7star-' + (currentUser?.id || 'me');
+  if (localStorage.getItem(key)) return;              // 已慶祝過（該裝置）
+  if (!dayQualifies({ data: savedData })) return;     // 這天沒拿到星星就不觸發
+  const total = (await api.listMine('daily')).filter(r => dayQualifies(r)).length;
+  if (total < 7) return;
+  localStorage.setItem(key, '1');
+  showSevenStarCelebration();
+}
+
+/* =========================================================
    每日打卡
    ========================================================= */
 async function renderDaily(c, period) {
@@ -1396,6 +1449,7 @@ async function renderDaily(c, period) {
     await api.saveRecord('daily', t, { data });
     await resyncSuperStar(weekOfDay(t));   // 改動後補算該週紫色超星星
     toast(isEdit ? '✅ 已更新並覆蓋原紀錄！' : '🌟 打卡成功！');
+    await maybeCelebrateSevenStars(data);  // 累積滿 7 顆黃星星→啟程慶祝＋影片（一生一次）
     showTab(isEdit ? 'history' : 'daily');
   };
   wireBackToTrail();

@@ -199,6 +199,8 @@
   .kv:last-child { border-bottom: none; }
   .kv > span { min-width: 96px; flex-shrink: 0; color: var(--ink-soft); font-weight: 800; font-size: 12.5px; }
   .kv > div { flex: 1; font-weight: 600; line-height: 1.7; overflow-x: auto; }
+  /* 自由填寫的長文字：保留換行與空白，完整呈現使用者輸入（含 emoji／顏文字排版） */
+  .kv > div.pre { white-space: pre-wrap; word-break: break-word; }
 
   /* dynamic tables */
   table.dyn { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -1962,7 +1964,8 @@ async function renderHistory(c) {
     }
   });
 }
-const kv = (label, val) => val ? `<div class="kv"><span>${label}</span><div>${val}</div></div>` : '';
+// pre=true：自由填寫的長文字，保留換行（表格類欄位不可用，否則樣板縮排會變成可見空白）
+const kv = (label, val, pre) => val ? `<div class="kv"><span>${label}</span><div${pre ? ' class="pre"' : ''}>${val}</div></div>` : '';
 const miniTable = (heads, rows) => rows.length ? `
   <table class="data" style="min-width:0">
     <thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead>
@@ -1981,8 +1984,8 @@ function detailDaily(d) {
       (d.ibv_items || []).map(it => [esc(it.name), esc(it.store || ''), esc(it.pct), esc(it.amount), fmt(ibvPoints(it))])))}
     ${kv('BV / IBV 總額', `BV ${fmt(d.bv_total ?? sumBV(d.bv_items))}｜IBV ${fmt(d.ibv_total ?? sumIBV(d.ibv_items))}`)}
     ${kv('專注正向滋養', list(d.focus))}
-    ${kv('學習重點筆記＆心得', esc(d.learn))}
-    ${kv('心情日記', esc(d.diary))}
+    ${kv('學習重點筆記＆心得', esc(d.learn), true)}
+    ${kv('心情日記', esc(d.diary), true)}
     ${kv('NOVA 牌卡', d.card ? `第 ${d.card} 號・${esc(NOVA_CARDS[d.card - 1]?.t || '')}｜${esc(NOVA_CARDS[d.card - 1]?.m || '')}` : '')}`;
 }
 function detailWeekly(d) {
@@ -1995,8 +1998,8 @@ function detailWeekly(d) {
     ${kv('正向學習環境', (d.trainings || []).join('、'))}
     ${kv('本週累加 BV / IBV', `BV ${d.bv ?? 0}｜IBV ${d.ibv ?? 0}`)}
     ${kv('上週目標達成', d.achieved === 'yes' ? '✅ 有達成' : d.achieved === 'no' ? '❌ 未達成' : '')}
-    ${kv('重新檢視週目標', esc(d.review))}
-    ${kv('下一週目標節奏', esc(d.custom))}`;
+    ${kv('重新檢視週目標', esc(d.review), true)}
+    ${kv('下一週目標節奏', esc(d.custom), true)}`;
 }
 function detailMonthly(d) {
   const names = arr => (arr || []).filter(Boolean).map(esc).join('、');
@@ -2006,8 +2009,8 @@ function detailMonthly(d) {
     ${kv('再推薦店長', names(d.referrals))}
     ${kv('討論時間', d.discuss_time ? esc(d.discuss_time).replace('T', ' ') : '')}
     ${kv('資深夥伴', esc(d.senior))}
-    ${kv('想調整修正', esc(d.adjust))}
-    ${kv('鼓勵的話語', esc(d.cheer))}`;
+    ${kv('想調整修正', esc(d.adjust), true)}
+    ${kv('鼓勵的話語', esc(d.cheer), true)}`;
 }
 
 /* =========================================================

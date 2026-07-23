@@ -156,6 +156,22 @@
   .traktrow .starrow { font-size: 20px; margin: 0; }
   .starmeta { background: #f6f3ff; border-radius: 14px; padding: 12px 16px; font-weight: 800; font-size: 14.5px; }
   .starmeta b { color: var(--violet); font-size: 18px; }
+  /* 打卡紀錄日曆（不論是否達標，顯示每天有無打卡） */
+  .cklegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; font-weight: 700; color: var(--ink-soft); margin: 4px 0 12px; }
+  .cklegend span { display: inline-flex; align-items: center; gap: 5px; }
+  .cklegend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .cklegend i.star { background: #fff3d6; border: 1.5px solid #ffcf3f; }
+  .cklegend i.in { background: #d9f7e8; }
+  .cklegend i.out { background: #ffe1e1; }
+  .ckcal { display: flex; flex-direction: column; gap: 6px; }
+  .ckrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ckwk { font-weight: 900; font-size: 13px; min-width: 92px; color: var(--ink-soft); }
+  .ckcells { display: grid; grid-template-columns: repeat(7, 30px); gap: 5px; }
+  .ckcell { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+  .ckcell.star { background: #fff3d6; color: #a07500; border: 1.5px solid #ffcf3f; }
+  .ckcell.in { background: #d9f7e8; color: #0b8a4e; }
+  .ckcell.out { background: #ffe1e1; color: #c23f3f; }
+  .ckcell.fut { background: #f4f2fa; color: #cfc7e6; }
   .diarynav { display: flex; align-items: center; gap: 14px; justify-content: center; margin-bottom: 14px; }
   .diarynav .dwk { font-weight: 900; font-size: 15px; color: var(--violet); min-width: 110px; text-align: center; }
   .dblog { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1.5px dashed #eee6ff; }
@@ -1877,6 +1893,37 @@ function renderDiaryBlog(host, dailies) {
   paint();
 }
 
+// 打卡紀錄日曆：不論當天是否達標，依「週六～週五」逐週顯示哪幾天有打卡／沒打卡
+function punchCalendarHTML(allDaily) {
+  const recByDay = {};
+  allDaily.forEach(r => { recByDay[r.period] = r; });
+  const head = '<h3 style="margin-top:24px">📅 打卡紀錄 <span class="muted">不論是否達標，顯示每天有無打卡</span></h3>';
+  const days = Object.keys(recByDay).sort();
+  if (days.length === 0) return head + '<p class="muted">還沒有任何打卡紀錄。</p>';
+  const today = todayStr(), curWk = weekKey();
+  const wks = [];
+  for (let w = weekOfDay(days[0]); w <= curWk; w = shiftWeekKey(w, 1)) wks.push(w);
+  const rows = wks.reverse().map(wk => {   // 最新週在上
+    const start = new Date(wk + 'T00:00:00');
+    const cells = [...Array(7)].map((_, i) => {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const ds = fmtD(d);
+      const cls = ds > today ? 'fut'
+        : recByDay[ds] ? (dayQualifies(recByDay[ds]) ? 'star' : 'in')
+        : 'out';
+      return `<div class="ckcell ${cls}" title="${ds}">${d.getDate()}</div>`;
+    }).join('');
+    return `<div class="ckrow"><span class="ckwk">${weekRangeLabel(wk)}</span><div class="ckcells">${cells}</div></div>`;
+  }).join('');
+  return head + `
+    <div class="cklegend">
+      <span><i class="star"></i>打卡＋黃星</span>
+      <span><i class="in"></i>有打卡</span>
+      <span><i class="out"></i>沒打卡</span>
+    </div>
+    <div class="ckcal">${rows}</div>`;
+}
+
 /* =========================================================
    我的紀錄 — 歷史提交列表，點開看完整內容
    ========================================================= */
@@ -1908,6 +1955,7 @@ async function renderHistory(c) {
           <span class="muted" style="margin-left:auto">${cnt}/${gl} 天${sup ? '・紫星達成 ✦' : ''}</span>
         </div>`;
       }).join('')}
+      ${punchCalendarHTML(allDaily)}
     </div>`;
 
   const summary = rec => {
